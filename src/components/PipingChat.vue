@@ -7,7 +7,7 @@
     </p>
     <hr>
     <p>
-      Your ID: <input type="text" v-bind:value="talkerId" disabled>
+      Your ID: <input type="text" v-model="talkerId">
       <input type="text" v-model="talk" placeholder="Your talk">
       <button v-on:click="sendTalk()">Send</button>
     </p>
