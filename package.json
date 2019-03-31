@@ -7,6 +7,7 @@
     "build": "vue-cli-service build"
   },
   "dependencies": {
+    "crypto-js": "^3.1.9-1",
     "jsencrypt": "^3.0.0-rc.1",
     "vue": "^2.6.6",
     "vue-class-component": "^6.0.0",
@@ -19,6 +20,7 @@
   },
   "author": "Ryo Ota <nwtgck@gmail.com> (https://github.com/nwtgck)",
   "devDependencies": {
+    "@types/crypto-js": "^3.1.43",
     "@types/whatwg-fetch": "0.0.33",
     "@vue/cli-plugin-babel": "^3.5.0",
     "@vue/cli-plugin-typescript": "^3.5.0",

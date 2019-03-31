@@ -35,6 +35,7 @@
 <script lang="ts">
 import { Component, Prop, Vue } from 'vue-property-decorator';
 import * as jsencrypt from 'jsencrypt';
+import * as cryptojs from 'crypto-js';
 
 type ParcelKind = "rsa_key" | "talk"
 
@@ -71,7 +72,7 @@ function getRandomId(len: number): string {
 }
 
 function getPath(toId: string, fromId: string): string {
-  return `${toId}-to-${fromId}`;
+  return cryptojs.SHA256(`${toId}-to-${fromId}`).toString();
 }
 
 /**
