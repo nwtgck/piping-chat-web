@@ -107,8 +107,12 @@ export default class PipingChat extends Vue {
 
           console.log("talk:", talk);
 
-          // Push peer's message
-          this.talks.push(talk);
+          // NOTE: I'm not sure this usage is correct to update asynchronously,
+          //       but without this, it sometimes weren't updated.
+          this.$nextTick(()=>{
+            // Push peer's message
+            this.talks.push(talk);
+          });
         } catch (err) {
           console.error('Error:', err);
         }
