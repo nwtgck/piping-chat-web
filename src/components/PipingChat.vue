@@ -14,14 +14,19 @@
     <!-- History of talks-->
     <div>
       <div v-for="talk in talks" :class='{"me": talk.talkerId === talkerId}'>
-        <span v-if="talk.talkerId !== talkerId">
+        <span v-if="talk.kind === 'user' && talk.talkerId !== talkerId">
           <b>{{ talk.talkerId }}</b>
           <span class="time">{{ dateFormat(talk.time )}}</span><br>
         </span>
-        <span v-if="talk.talkerId === talkerId" class="time">
+        <span v-if="talk.kind === 'user' && talk.talkerId === talkerId" class="time">
           {{ dateFormat(talk.time) }}
         </span>
+        <span v-if="talk.kind === 'user'">
         「{{ talk.content }}」
+        </span>
+        <span v-if="talk.kind === 'system'">
+          System: {{ talk.content }}
+        </span>
       </div>
     </div>
   </div>
@@ -29,7 +34,6 @@
 
 <script lang="ts">
 import { Component, Prop, Vue } from 'vue-property-decorator';
-// import * as cryptico from 'cryptico';
 import * as jsencrypt from 'jsencrypt';
 
 type ParcelKind = "rsa_key" | "talk"
@@ -39,11 +43,20 @@ type Parcel = {
   content: string
 };
 
-type Talk = {
+type UserTalk = {
+  kind: "user";
   time: Date,
   talkerId: String,
   content: String
 };
+
+type SystemTalk = {
+  kind: "system";
+  time: Date,
+  content: String
+};
+
+type Talk = UserTalk | SystemTalk;
 
 /**
  * Get random ID
@@ -104,6 +117,13 @@ export default class PipingChat extends Vue {
   }
 
   connectToPeer(): void {
+
+    this.talks.push({
+      kind: "system",
+      time: new Date(),
+      content: "Connecting..."
+    });
+
     // Send my public key
     (async ()=>{
       // Get my public key
@@ -155,24 +175,32 @@ export default class PipingChat extends Vue {
               // Set peer's public key
               this.peerCrypt.setPublicKey(parcel.content);
               console.log("Peer's public key:", parcel.content);
+
+              this.talks.push({
+                kind: "system",
+                time: new Date(),
+                content: "Connection established!"
+              });
+
               break;
             case "talk":
               // Decrypt talk
               const decryptedTalk: string = this.crypt.decrypt(parcel.content);
 
-              const talk: Talk = {
+              const userTalk: UserTalk = {
+                kind: "user",
                 time: new Date(),
                 talkerId: this.peerId,
                 content: decryptedTalk
               };
 
-              console.log("talk:", talk);
+              console.log("userTalk:", userTalk);
 
               // NOTE: I'm not sure this usage is correct to update asynchronously,
               //       but without this, it sometimes weren't updated.
               this.$nextTick(()=>{
                 // Push peer's message
-                this.talks.push(talk);
+                this.talks.push(userTalk);
               });
               break;
           }
@@ -186,6 +214,7 @@ export default class PipingChat extends Vue {
   sendTalk(): void {
     // Push my talk
     this.talks.push({
+      kind: "user",
       time: new Date(),
       talkerId: this.talkerId,
       content: this.talk
