@@ -8,8 +8,8 @@
     <hr>
     <p>
       Your ID: <input type="text" v-bind:value="talkerId" disabled>
-      <input type="text" placeholder="Your talk">
-      <button>Send</button>
+      <input type="text" v-model="talk" placeholder="Your talk">
+      <button v-on:click="sendTalk()">Send</button>
     </p>
     <!-- History of talks-->
     <div>
@@ -29,6 +29,15 @@
 
 <script lang="ts">
 import { Component, Prop, Vue } from 'vue-property-decorator';
+// import * as cryptico from 'cryptico';
+import * as jsencrypt from 'jsencrypt';
+
+type ParcelKind = "rsa_key" | "talk"
+
+type Parcel = {
+  kind: ParcelKind,
+  content: string
+};
 
 type Talk = {
   time: Date,
@@ -52,6 +61,27 @@ function getPath(toId: string, fromId: string): string {
   return `${toId}-to-${fromId}`;
 }
 
+/**
+ * Parse JSON to Parcel
+ * @param json
+ */
+function parseJsonToParcel(json: any): Parcel | undefined {
+  if(json.content === undefined) {
+    return undefined;
+  }
+  switch (json.kind) {
+    case "rsa_key":
+    case "talk":
+      return {
+        kind: json.kind,
+        content: json.content
+      };
+    default:
+      return undefined;
+  }
+}
+
+
 @Component
 export default class PipingChat extends Vue {
   // TODO: Hard code
@@ -59,24 +89,14 @@ export default class PipingChat extends Vue {
   peerId: string = "";
 
   talkerId = getRandomId(3);
-  // TODO: Hard code
-  talks: Talk[] = [
-    {
-      time: new Date(),
-      talkerId: "hoge_id2",
-      content: "Hi!"
-    },
-    {
-      time: new Date(),
-      talkerId: this.talkerId,
-      content: "Hello. How are you?"
-    },
-    {
-      time: new Date(),
-      talkerId: "hoge_id2",
-      content: "Good."
-    },
-  ];
+  talks: Talk[] = [];
+
+  talk: string = "";
+
+  // My crypt
+  private crypt     = new jsencrypt.JSEncrypt();
+  // Peer crypt
+  private peerCrypt = new jsencrypt.JSEncrypt();
 
   // TODO: Implement properly
   dateFormat(date: Date): string {
@@ -84,6 +104,27 @@ export default class PipingChat extends Vue {
   }
 
   connectToPeer(): void {
+    // Send my public key
+    (async ()=>{
+      // Get my public key
+      const publicKey: string = await new Promise(resolve => {
+        this.crypt.getKey(()=>{
+          resolve(this.crypt.getPublicKey())
+        });
+      });
+
+      const url = `${this.serverUrl}/${getPath(this.talkerId, this.peerId)}`;
+      const parcel: Parcel = {
+        kind: "rsa_key",
+        content: publicKey,
+      };
+      const res = await fetch(url, {
+        method: "POST",
+        body: JSON.stringify(parcel)
+      });
+      console.log("res:", res);
+    })();
+
     // Get-loop of peer's message
     (async ()=>{
       const url = `${this.serverUrl}/${getPath(this.peerId, this.talkerId)}`;
@@ -99,24 +140,71 @@ export default class PipingChat extends Vue {
             return;
           }
 
-          const talk: Talk = {
-            time: new Date(),
-            talkerId: this.peerId,
-            content: await res.text()
-          };
+          // Parse parcel
+          const parcel: Parcel | undefined = parseJsonToParcel(
+            await res.json()
+          );
 
-          console.log("talk:", talk);
+          if(parcel === undefined) {
+            console.error(`Parse error: ${await res.json()}`);
+            return;
+          }
 
-          // NOTE: I'm not sure this usage is correct to update asynchronously,
-          //       but without this, it sometimes weren't updated.
-          this.$nextTick(()=>{
-            // Push peer's message
-            this.talks.push(talk);
-          });
+          switch (parcel.kind) {
+            case "rsa_key":
+              // Set peer's public key
+              this.peerCrypt.setPublicKey(parcel.content);
+              console.log("Peer's public key:", parcel.content);
+              break;
+            case "talk":
+              // Decrypt talk
+              const decryptedTalk: string = this.crypt.decrypt(parcel.content);
+
+              const talk: Talk = {
+                time: new Date(),
+                talkerId: this.peerId,
+                content: decryptedTalk
+              };
+
+              console.log("talk:", talk);
+
+              // NOTE: I'm not sure this usage is correct to update asynchronously,
+              //       but without this, it sometimes weren't updated.
+              this.$nextTick(()=>{
+                // Push peer's message
+                this.talks.push(talk);
+              });
+              break;
+          }
         } catch (err) {
           console.error('Error:', err);
         }
       }
+    })();
+  }
+
+  sendTalk(): void {
+    // Push my talk
+    this.talks.push({
+      time: new Date(),
+      talkerId: this.talkerId,
+      content: this.talk
+    });
+    const myTalk: string = this.talk;
+    this.talk = "";
+
+    (async ()=>{
+      const url = `${this.serverUrl}/${getPath(this.talkerId, this.peerId)}`;
+      // Encrypt talk
+      const encryptedTalk: string = this.peerCrypt.encrypt(myTalk);
+      const parcel: Parcel = {
+        kind: "talk",
+        content: encryptedTalk,
+      };
+      const res = await fetch(url, {
+        method: "POST",
+        body: JSON.stringify(parcel)
+      });
     })();
   }
 
