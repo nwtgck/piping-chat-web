@@ -1,6 +1,6 @@
 {
   "name": "piping-chat",
-  "version": "0.1.0",
+  "version": "0.1.1-SNAPSHOT",
   "private": true,
   "scripts": {
     "serve": "vue-cli-service serve",
@@ -9,9 +9,16 @@
   "dependencies": {
     "vue": "^2.6.6",
     "vue-class-component": "^6.0.0",
-    "vue-property-decorator": "^8.0.0"
+    "vue-property-decorator": "^8.0.0",
+    "whatwg-fetch": "^3.0.0"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nwtgck/piping-chat-web"
+  },
+  "author": "Ryo Ota <nwtgck@gmail.com> (https://github.com/nwtgck)",
   "devDependencies": {
+    "@types/whatwg-fetch": "0.0.33",
     "@vue/cli-plugin-babel": "^3.5.0",
     "@vue/cli-plugin-typescript": "^3.5.0",
     "@vue/cli-service": "^3.5.0",
