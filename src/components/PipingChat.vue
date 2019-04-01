@@ -4,7 +4,19 @@
       Server: <input type="text" v-model="serverUrl"><br>
       Your ID: <input type="text" v-model="talkerId"><br>
       Peer ID: <input type="text" v-model="peerId" placeholder="e.g. bma"><br>
-      <button v-on:click="connectToPeer()">Connect</button>
+      <button v-on:click="connectToPeer()">Connect</button><br>
+<!--      <details>-->
+<!--        <summary>Advanced</summary>-->
+<!--        <h3>Your public key</h3>-->
+<!--        <textarea cols="80" rows="8" v-model="crypt.getPublicKey()"></textarea>-->
+
+<!--        <details>-->
+<!--          <summary>Your private key</summary>-->
+<!--          <textarea cols="80" rows="8" v-model="crypt.getPrivateKey()"></textarea>-->
+<!--        </details>-->
+<!--        Key bits: <input type="number" v-model="nKeyBits"><br>-->
+<!--        <button v-on:click="regenerateKeys()">Regenerate keys</button>-->
+<!--      </details>-->
     </p>
     <hr>
     <p>
@@ -95,6 +107,29 @@ function parseJsonToParcel(json: any): Parcel | undefined {
   }
 }
 
+const RSA = {
+  encrypt(publicKey: string, input: string): string {
+    const crypt  = new jsencrypt.JSEncrypt();
+    crypt.setPublicKey(publicKey);
+    return crypt.encrypt(input);
+  },
+  decrypt(privateKey: string, encryptedText: string): string {
+    const crypt  = new jsencrypt.JSEncrypt();
+    crypt.setPublicKey(privateKey);
+    return crypt.decrypt(encryptedText);
+  },
+  generateKeys(options: jsencrypt.Options): Promise<{publicKey: string, privateKey: string}> {
+    const crypt  = new jsencrypt.JSEncrypt(options);
+    return new Promise((resolve)=>{
+      crypt.getKey(()=>{
+        resolve({
+          publicKey: crypt.getPublicKey(),
+          privateKey: crypt.getPrivateKey(),
+        })
+      });
+    });
+  }
+};
 
 @Component
 export default class PipingChat extends Vue {
@@ -107,19 +142,40 @@ export default class PipingChat extends Vue {
 
   talk: string = "";
 
-  // My crypt
-  private crypt     = new jsencrypt.JSEncrypt();
-  // Peer crypt
-  private peerCrypt = new jsencrypt.JSEncrypt();
+  nKeyBits = 1024;
+
+  // My keys
+  keysPromise: Promise<{publicKey: string, privateKey: string}> =
+    RSA.generateKeys({
+      default_key_size: this.nKeyBits
+    });
+
+  // Peer's public key
+  peerPublicKey?: string;
+
 
   // Whether your public key sent or not
   private hasPublicKeySent: boolean = false;
   // Whether peer's public key received or not
   private hasPeerPublicKeyReceived: boolean = false;
 
+
+  /**
+   * Regenerate public/private keys
+   */
+  regenerateKeys(): void {
+    this.keysPromise = RSA.generateKeys({
+      default_key_size: this.nKeyBits
+    });
+  }
+
+  get isEstablished(): boolean {
+    return this.hasPublicKeySent && this.hasPeerPublicKeyReceived;
+  }
+
   // Print established message if established
   echoEstablishMessageIfNeed(): void {
-    if(this.hasPublicKeySent && this.hasPeerPublicKeyReceived) {
+    if(this.isEstablished) {
       this.talks.push({
         kind: "system",
         time: new Date(),
@@ -143,11 +199,7 @@ export default class PipingChat extends Vue {
       });
 
       // Get my public key
-      const publicKey: string = await new Promise(resolve => {
-        this.crypt.getKey(()=>{
-          resolve(this.crypt.getPublicKey())
-        });
-      });
+      const { publicKey } = await this.keysPromise;
 
       const url = `${this.serverUrl}/${getPath(this.talkerId, this.peerId)}`;
       const parcel: Parcel = {
@@ -197,7 +249,7 @@ export default class PipingChat extends Vue {
           switch (parcel.kind) {
             case "rsa_key":
               // Set peer's public key
-              this.peerCrypt.setPublicKey(parcel.content);
+              this.peerPublicKey = parcel.content;
               console.log("Peer's public key:", parcel.content);
 
               this.talks.push({
@@ -210,7 +262,10 @@ export default class PipingChat extends Vue {
               break;
             case "talk":
               // Decrypt talk
-              const decryptedTalk: string = this.crypt.decrypt(parcel.content);
+              const decryptedTalk: string = RSA.decrypt(
+                (await this.keysPromise).privateKey,
+                parcel.content
+              );
 
               const userTalk: UserTalk = {
                 kind: "user",
@@ -249,16 +304,27 @@ export default class PipingChat extends Vue {
 
     (async ()=>{
       const url = `${this.serverUrl}/${getPath(this.talkerId, this.peerId)}`;
-      // Encrypt talk
-      const encryptedTalk: string = this.peerCrypt.encrypt(myTalk);
-      const parcel: Parcel = {
-        kind: "talk",
-        content: encryptedTalk,
-      };
-      const res = await fetch(url, {
-        method: "POST",
-        body: JSON.stringify(parcel)
-      });
+      if(this.peerPublicKey === undefined) {
+        this.talks.push({
+          kind: "system",
+          time: new Date(),
+          content: "Peer's public key is not received yet."
+        });
+      } else {
+        // Encrypt talk
+        const encryptedTalk: string = RSA.encrypt(
+          this.peerPublicKey,
+          myTalk
+        );
+        const parcel: Parcel = {
+          kind: "talk",
+          content: encryptedTalk,
+        };
+        const res = await fetch(url, {
+          method: "POST",
+          body: JSON.stringify(parcel)
+        });
+      }
     })();
   }
 
