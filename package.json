@@ -23,7 +23,7 @@
   "devDependencies": {
     "@types/crypto-js": "^3.1.43",
     "@types/whatwg-fetch": "0.0.33",
-    "@vue/cli-plugin-babel": "^3.5.4",
+    "@vue/cli-plugin-babel": "^3.5.5",
     "@vue/cli-plugin-typescript": "^3.5.0",
     "@vue/cli-service": "^3.5.0",
     "typescript": "^3.2.1",
