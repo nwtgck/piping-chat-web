@@ -1,6 +1,7 @@
 <template>
   <div id="app">
     <h1>Piping Chat</h1>
+    🛡 End-to-End Encryption Chat via <a href="https://github.com/nwtgck/piping-server">Piping Server</a>
     <PipingChat />
   </div>
 </template>
