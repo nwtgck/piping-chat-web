@@ -149,7 +149,7 @@ export default class PipingChat extends Vue {
 
   talk: string = "";
 
-  nKeyBits = 1024;
+  nKeyBits = 2048;
 
   // My private key
   // NOTE: public key can be computable by private key
@@ -181,10 +181,40 @@ export default class PipingChat extends Vue {
   private hasPeerPublicKeyReceived: boolean = false;
 
   private async updatePrivateKey() {
+    // Echo generating message
+    this.talks.unshift({
+      kind: "system",
+      time: new Date(),
+      content: `${this.nKeyBits}-bit key generating...`
+    });
+
+    // Record start
+    const startTime = new Date();
+    // Generating message loop
+    const timerId = setInterval(()=>{
+      const pastSec: number = (new Date().getTime() - startTime.getTime()) / 1000;
+      this.talks.unshift({
+        kind: "system",
+        time: new Date(),
+        content: `${this.nKeyBits}-bit key generating... (${pastSec} sec passed)`
+      });
+    }, 4000);
+
+    // Generate key
     const { privateKey } = await RSA.generateKeys({
       default_key_size: this.nKeyBits
     });
+    // Clear the time
+    clearInterval(timerId);
+    // Update private key
     this.privateKey = privateKey;
+
+    // Echo generated message
+    this.talks.unshift({
+      kind: "system",
+      time: new Date(),
+      content: `🔑 ${this.nKeyBits}-bit key generated!`
+    });
   }
 
   mounted() {
