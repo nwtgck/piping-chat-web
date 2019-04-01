@@ -77,7 +77,7 @@ type Talk = UserTalk | SystemTalk;
  * @param len
  */
 function getRandomId(len: number): string {
-  const alphas  = ["a", "b", "c", "d", "e", "f", "h", "i", "j", "k", "m", "n", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"];
+  const alphas  = ["a", "b", "c", "d", "e", "f", "h", "i", "j", "k", "m", "n", "p", "r", "s", "t", "u", "v", "w", "x", "y", "z"];
   const chars   = [...alphas];
 
   const randomArr = window.crypto.getRandomValues(new Uint32Array(len));
