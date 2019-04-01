@@ -1,13 +1,13 @@
 <template>
   <div>
     <p>
-      Server: <input type="text" v-model="serverUrl">
-      Peer ID: <input type="text" v-model="peerId" placeholder="e.g. bma">
+      Server: <input type="text" v-model="serverUrl"><br>
+      Your ID: <input type="text" v-model="talkerId"><br>
+      Peer ID: <input type="text" v-model="peerId" placeholder="e.g. bma"><br>
       <button v-on:click="connectToPeer()">Connect</button>
     </p>
     <hr>
     <p>
-      Your ID: <input type="text" v-model="talkerId">
       <input type="text" v-model="talk" placeholder="Your talk">
       <button v-on:click="sendTalk()">Send</button>
     </p>
@@ -112,21 +112,36 @@ export default class PipingChat extends Vue {
   // Peer crypt
   private peerCrypt = new jsencrypt.JSEncrypt();
 
+  // Whether your public key sent or not
+  private hasPublicKeySent: boolean = false;
+  // Whether peer's public key received or not
+  private hasPeerPublicKeyReceived: boolean = false;
+
+  // Print established message if established
+  echoEstablishMessageIfNeed(): void {
+    if(this.hasPublicKeySent && this.hasPeerPublicKeyReceived) {
+      this.talks.push({
+        kind: "system",
+        time: new Date(),
+        content: `Connection established with "${this.peerId}"!`
+      });
+    }
+  }
+
   // TODO: Implement properly
   dateFormat(date: Date): string {
     return date.toString();
   }
 
   connectToPeer(): void {
-
-    this.talks.push({
-      kind: "system",
-      time: new Date(),
-      content: "Connecting..."
-    });
-
     // Send my public key
     (async ()=>{
+      this.talks.push({
+        kind: "system",
+        time: new Date(),
+        content: `Sending your public key to "${this.peerId}"...`
+      });
+
       // Get my public key
       const publicKey: string = await new Promise(resolve => {
         this.crypt.getKey(()=>{
@@ -143,6 +158,14 @@ export default class PipingChat extends Vue {
         method: "POST",
         body: JSON.stringify(parcel)
       });
+
+      this.talks.push({
+        kind: "system",
+        time: new Date(),
+        content: "Your public key sent."
+      });
+      this.hasPublicKeySent = true;
+      this.echoEstablishMessageIfNeed();
       console.log("res:", res);
     })();
 
@@ -180,9 +203,10 @@ export default class PipingChat extends Vue {
               this.talks.push({
                 kind: "system",
                 time: new Date(),
-                content: "Connection established!"
+                content: "Peer's public key received."
               });
-
+              this.hasPeerPublicKeyReceived = true;
+              this.echoEstablishMessageIfNeed();
               break;
             case "talk":
               // Decrypt talk
