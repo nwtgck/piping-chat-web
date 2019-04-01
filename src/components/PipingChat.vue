@@ -163,10 +163,15 @@ export default class PipingChat extends Vue {
     if (this.privateKey === "") {
       return "";
     } else {
-      // Compute public key by the private key
-      const crypt  = new jsencrypt.JSEncrypt();
-      crypt.setPrivateKey(this.privateKey);
-      return crypt.getPublicKey();
+      try {
+        // Compute public key by the private key
+        const crypt = new jsencrypt.JSEncrypt();
+        crypt.setPrivateKey(this.privateKey);
+        return crypt.getPublicKey();
+      } catch (err) {
+        console.error(err);
+        return "INVALID PRIVATE KEY";
+      }
     }
   }
 
