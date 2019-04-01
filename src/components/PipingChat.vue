@@ -8,10 +8,10 @@
       <details>
         <summary>Advanced</summary>
         <h3>Your public key</h3>
-        <textarea cols="80" rows="8" v-model="keys.publicKey"></textarea>
+        <textarea cols="80" rows="8" v-model="publicKey" disabled></textarea>
         <details>
-          <summary>Your private key</summary>
-          <textarea cols="80" rows="8" v-model="keys.privateKey"></textarea>
+          <summary>Your private key (editable)</summary>
+          <textarea cols="80" rows="8" v-model="privateKey"></textarea>
         </details>
         Key bits: <input type="number" v-model="nKeyBits"><br>
         <button v-on:click="regenerateKeys()">Regenerate keys</button>
@@ -149,41 +149,83 @@ export default class PipingChat extends Vue {
 
   talk: string = "";
 
-  nKeyBits = 1024;
+  nKeyBits = 2048;
 
-  // My keys
-  keys: {publicKey: string, privateKey: string} ={
-    publicKey: "",
-    privateKey: ""
-  };
+  // My private key
+  // NOTE: public key can be computable by private key
+  privateKey: string = "";
 
   // Peer's public key
   peerPublicKey: string = "";
 
+  // My public key
+  get publicKey(): string {
+    if (this.privateKey === "") {
+      return "";
+    } else {
+      try {
+        // Compute public key by the private key
+        const crypt = new jsencrypt.JSEncrypt();
+        crypt.setPrivateKey(this.privateKey);
+        return crypt.getPublicKey();
+      } catch (err) {
+        console.error(err);
+        return "INVALID PRIVATE KEY";
+      }
+    }
+  }
 
   // Whether your public key sent or not
   private hasPublicKeySent: boolean = false;
   // Whether peer's public key received or not
   private hasPeerPublicKeyReceived: boolean = false;
 
+  private async updatePrivateKey() {
+    // Echo generating message
+    this.talks.unshift({
+      kind: "system",
+      time: new Date(),
+      content: `${this.nKeyBits}-bit key generating...`
+    });
+
+    // Record start
+    const startTime = new Date();
+    // Generating message loop
+    const timerId = setInterval(()=>{
+      const pastSec: number = (new Date().getTime() - startTime.getTime()) / 1000;
+      this.talks.unshift({
+        kind: "system",
+        time: new Date(),
+        content: `${this.nKeyBits}-bit key generating... (${pastSec} sec passed)`
+      });
+    }, 4000);
+
+    // Generate key
+    const { privateKey } = await RSA.generateKeys({
+      default_key_size: this.nKeyBits
+    });
+    // Clear the time
+    clearInterval(timerId);
+    // Update private key
+    this.privateKey = privateKey;
+
+    // Echo generated message
+    this.talks.unshift({
+      kind: "system",
+      time: new Date(),
+      content: `🔑 ${this.nKeyBits}-bit key generated!`
+    });
+  }
 
   mounted() {
-    (async() => {
-      this.keys = await RSA.generateKeys({
-        default_key_size: this.nKeyBits
-      });
-    })();
+    this.updatePrivateKey();
   }
 
   /**
-   * Regenerate public/private keys
+   * Regenerate private keys
    */
   regenerateKeys(): void {
-    (async() => {
-      this.keys = await RSA.generateKeys({
-        default_key_size: this.nKeyBits
-      });
-    })();
+    this.updatePrivateKey();
   }
 
   get isEstablished(): boolean {
@@ -213,7 +255,7 @@ export default class PipingChat extends Vue {
       const url = `${this.serverUrl}/${getPath(this.talkerId, this.peerId)}`;
       const parcel: Parcel = {
         kind: "rsa_key",
-        content: this.keys.publicKey,
+        content: this.publicKey,
       };
       const res = await fetch(url, {
         method: "POST",
@@ -272,7 +314,7 @@ export default class PipingChat extends Vue {
             case "talk":
               // Decrypt talk
               const decryptedTalk: string = RSA.decrypt(
-                this.keys.privateKey,
+                this.privateKey,
                 parcel.content
               );
 
