@@ -347,5 +347,5 @@ export default class PipingChat extends Vue {
 .time{
   font-size: 0.6em;
   color: #aaa;
-};
+}
 </style>
