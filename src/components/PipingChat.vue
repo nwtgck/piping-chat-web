@@ -5,18 +5,19 @@
       Your ID: <input type="text" v-model="talkerId"><br>
       Peer ID: <input type="text" v-model="peerId" placeholder="e.g. bma"><br>
       <button v-on:click="connectToPeer()">Connect</button><br>
-<!--      <details>-->
-<!--        <summary>Advanced</summary>-->
-<!--        <h3>Your public key</h3>-->
-<!--        <textarea cols="80" rows="8" v-model="crypt.getPublicKey()"></textarea>-->
-
-<!--        <details>-->
-<!--          <summary>Your private key</summary>-->
-<!--          <textarea cols="80" rows="8" v-model="crypt.getPrivateKey()"></textarea>-->
-<!--        </details>-->
-<!--        Key bits: <input type="number" v-model="nKeyBits"><br>-->
-<!--        <button v-on:click="regenerateKeys()">Regenerate keys</button>-->
-<!--      </details>-->
+      <details>
+        <summary>Advanced</summary>
+        <h3>Your public key</h3>
+        <textarea cols="80" rows="8" v-model="keys.publicKey"></textarea>
+        <details>
+          <summary>Your private key</summary>
+          <textarea cols="80" rows="8" v-model="keys.privateKey"></textarea>
+        </details>
+        Key bits: <input type="number" v-model="nKeyBits"><br>
+        <button v-on:click="regenerateKeys()">Regenerate keys</button>
+        <h3>Peer's public key</h3>
+        <textarea cols="80" rows="8" v-model="peerPublicKey"></textarea>
+      </details>
     </p>
     <hr>
     <p>
@@ -145,13 +146,13 @@ export default class PipingChat extends Vue {
   nKeyBits = 1024;
 
   // My keys
-  keysPromise: Promise<{publicKey: string, privateKey: string}> =
-    RSA.generateKeys({
-      default_key_size: this.nKeyBits
-    });
+  keys: {publicKey: string, privateKey: string} ={
+    publicKey: "",
+    privateKey: ""
+  };
 
   // Peer's public key
-  peerPublicKey?: string;
+  peerPublicKey: string = "";
 
 
   // Whether your public key sent or not
@@ -160,13 +161,23 @@ export default class PipingChat extends Vue {
   private hasPeerPublicKeyReceived: boolean = false;
 
 
+  mounted() {
+    (async() => {
+      this.keys = await RSA.generateKeys({
+        default_key_size: this.nKeyBits
+      });
+    })();
+  }
+
   /**
    * Regenerate public/private keys
    */
   regenerateKeys(): void {
-    this.keysPromise = RSA.generateKeys({
-      default_key_size: this.nKeyBits
-    });
+    (async() => {
+      this.keys = await RSA.generateKeys({
+        default_key_size: this.nKeyBits
+      });
+    })();
   }
 
   get isEstablished(): boolean {
@@ -198,13 +209,10 @@ export default class PipingChat extends Vue {
         content: `Sending your public key to "${this.peerId}"...`
       });
 
-      // Get my public key
-      const { publicKey } = await this.keysPromise;
-
       const url = `${this.serverUrl}/${getPath(this.talkerId, this.peerId)}`;
       const parcel: Parcel = {
         kind: "rsa_key",
-        content: publicKey,
+        content: this.keys.publicKey,
       };
       const res = await fetch(url, {
         method: "POST",
@@ -263,7 +271,7 @@ export default class PipingChat extends Vue {
             case "talk":
               // Decrypt talk
               const decryptedTalk: string = RSA.decrypt(
-                (await this.keysPromise).privateKey,
+                this.keys.privateKey,
                 parcel.content
               );
 
