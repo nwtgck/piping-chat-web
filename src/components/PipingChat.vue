@@ -29,16 +29,17 @@
       <div v-for="talk in talks" :class='{"me": talk.talkerId === talkerId}'>
         <span v-if="talk.kind === 'user' && talk.talkerId !== talkerId">
           <b>{{ talk.talkerId }}</b>
-          <span class="time">{{ dateFormat(talk.time )}}</span><br>
+          <time-ago :refresh="60" :datetime="talk.time" class="time"></time-ago><br>
         </span>
         <span v-if="talk.kind === 'user' && talk.talkerId === talkerId" class="time">
-          {{ dateFormat(talk.time) }}
+          <time-ago :refresh="60" :datetime="talk.time"></time-ago>
         </span>
         <span v-if="talk.kind === 'user'">
         「{{ talk.content }}」
         </span>
         <span v-if="talk.kind === 'system'">
-          <b>System</b>: {{ talk.content }}
+          <b>System</b> <time-ago :refresh="60" :datetime="talk.time" class="time"></time-ago>:
+          {{ talk.content }}
         </span>
       </div>
     </div>
@@ -47,6 +48,7 @@
 
 <script lang="ts">
 import { Component, Prop, Vue } from 'vue-property-decorator';
+import TimeAgo from 'vue2-timeago'
 import * as jsencrypt from 'jsencrypt';
 import * as cryptojs from 'crypto-js';
 
@@ -132,7 +134,11 @@ const RSA = {
   }
 };
 
-@Component
+@Component({
+  components: {
+    TimeAgo
+  }
+})
 export default class PipingChat extends Vue {
   // TODO: Hard code
   serverUrl: string = "https://ppng.ml";
@@ -193,11 +199,6 @@ export default class PipingChat extends Vue {
         content: `Connection established with "${this.peerId}"!`
       });
     }
-  }
-
-  // TODO: Implement properly
-  dateFormat(date: Date): string {
-    return date.toString();
   }
 
   connectToPeer(): void {
