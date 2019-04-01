@@ -38,7 +38,7 @@
         「{{ talk.content }}」
         </span>
         <span v-if="talk.kind === 'system'">
-          System: {{ talk.content }}
+          <b>System</b>: {{ talk.content }}
         </span>
       </div>
     </div>
@@ -187,7 +187,7 @@ export default class PipingChat extends Vue {
   // Print established message if established
   echoEstablishMessageIfNeed(): void {
     if(this.isEstablished) {
-      this.talks.push({
+      this.talks.unshift({
         kind: "system",
         time: new Date(),
         content: `Connection established with "${this.peerId}"!`
@@ -203,7 +203,7 @@ export default class PipingChat extends Vue {
   connectToPeer(): void {
     // Send my public key
     (async ()=>{
-      this.talks.push({
+      this.talks.unshift({
         kind: "system",
         time: new Date(),
         content: `Sending your public key to "${this.peerId}"...`
@@ -219,7 +219,7 @@ export default class PipingChat extends Vue {
         body: JSON.stringify(parcel)
       });
 
-      this.talks.push({
+      this.talks.unshift({
         kind: "system",
         time: new Date(),
         content: "Your public key sent."
@@ -260,7 +260,7 @@ export default class PipingChat extends Vue {
               this.peerPublicKey = parcel.content;
               console.log("Peer's public key:", parcel.content);
 
-              this.talks.push({
+              this.talks.unshift({
                 kind: "system",
                 time: new Date(),
                 content: "Peer's public key received."
@@ -288,7 +288,7 @@ export default class PipingChat extends Vue {
               //       but without this, it sometimes weren't updated.
               this.$nextTick(()=>{
                 // Push peer's message
-                this.talks.push(userTalk);
+                this.talks.unshift(userTalk);
               });
               break;
           }
@@ -301,7 +301,7 @@ export default class PipingChat extends Vue {
 
   sendTalk(): void {
     // Push my talk
-    this.talks.push({
+    this.talks.unshift({
       kind: "user",
       time: new Date(),
       talkerId: this.talkerId,
@@ -313,7 +313,7 @@ export default class PipingChat extends Vue {
     (async ()=>{
       const url = `${this.serverUrl}/${getPath(this.talkerId, this.peerId)}`;
       if(this.peerPublicKey === undefined) {
-        this.talks.push({
+        this.talks.unshift({
           kind: "system",
           time: new Date(),
           content: "Peer's public key is not received yet."
