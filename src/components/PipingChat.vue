@@ -195,7 +195,7 @@ export default class PipingChat extends Vue {
   }
 
   // Assign a private key asynchronously
-  private async assignPrivateKey(): void {
+  private async assignPrivateKey(): Promise<void> {
     // Echo generating message
     this.echoSystemTalk(`${this.nKeyBits}-bit key generating...`);
 
