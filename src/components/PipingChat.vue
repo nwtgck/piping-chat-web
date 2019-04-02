@@ -13,8 +13,8 @@
           <summary>Your private key (editable)</summary>
           <textarea cols="80" rows="8" v-model="privateKey"></textarea>
         </details>
-        Key bits: <input type="number" v-model="nKeyBits"><br>
-        <button v-on:click="regenerateKeys()">Regenerate keys</button>
+        Key bits: <input type="number" v-model="nKeyBits">
+        <button v-on:click="assignPrivateKey()">Regenerate keys</button>
         <h3>Peer's public key</h3>
         <textarea cols="80" rows="8" v-model="peerPublicKey"></textarea>
       </details>
@@ -180,7 +180,7 @@ export default class PipingChat extends Vue {
   // Whether peer's public key received or not
   private hasPeerPublicKeyReceived: boolean = false;
 
-  private async updatePrivateKey() {
+  private async assignPrivateKey() {
     // Echo generating message
     this.talks.unshift({
       kind: "system",
@@ -218,14 +218,7 @@ export default class PipingChat extends Vue {
   }
 
   mounted() {
-    this.updatePrivateKey();
-  }
-
-  /**
-   * Regenerate private keys
-   */
-  regenerateKeys(): void {
-    this.updatePrivateKey();
+    this.assignPrivateKey();
   }
 
   get isEstablished(): boolean {
