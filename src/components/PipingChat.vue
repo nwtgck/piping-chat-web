@@ -180,24 +180,24 @@ export default class PipingChat extends Vue {
   // Whether peer's public key received or not
   private hasPeerPublicKeyReceived: boolean = false;
 
-  private async assignPrivateKey() {
-    // Echo generating message
+  private echoSystemTalk(message: string): void {
     this.talks.unshift({
       kind: "system",
       time: new Date(),
-      content: `${this.nKeyBits}-bit key generating...`
+      content: message
     });
+  }
+
+  private async assignPrivateKey() {
+    // Echo generating message
+    this.echoSystemTalk(`${this.nKeyBits}-bit key generating...`);
 
     // Record start
     const startTime = new Date();
     // Generating message loop
     const timerId = setInterval(()=>{
       const pastSec: number = (new Date().getTime() - startTime.getTime()) / 1000;
-      this.talks.unshift({
-        kind: "system",
-        time: new Date(),
-        content: `${this.nKeyBits}-bit key generating... (${pastSec} sec passed)`
-      });
+      this.echoSystemTalk(`${this.nKeyBits}-bit key generating... (${pastSec} sec passed)`);
     }, 4000);
 
     // Generate key
@@ -210,11 +210,7 @@ export default class PipingChat extends Vue {
     this.privateKey = privateKey;
 
     // Echo generated message
-    this.talks.unshift({
-      kind: "system",
-      time: new Date(),
-      content: `🔑 ${this.nKeyBits}-bit key generated!`
-    });
+    this.echoSystemTalk(`🔑 ${this.nKeyBits}-bit key generated!`);
   }
 
   mounted() {
@@ -228,22 +224,14 @@ export default class PipingChat extends Vue {
   // Print established message if established
   echoEstablishMessageIfNeed(): void {
     if(this.isEstablished) {
-      this.talks.unshift({
-        kind: "system",
-        time: new Date(),
-        content: `Connection established with "${this.peerId}"!`
-      });
+      this.echoSystemTalk(`Connection established with "${this.peerId}"!`);
     }
   }
 
   connectToPeer(): void {
     // Send my public key
     (async ()=>{
-      this.talks.unshift({
-        kind: "system",
-        time: new Date(),
-        content: `Sending your public key to "${this.peerId}"...`
-      });
+      this.echoSystemTalk(`Sending your public key to "${this.peerId}"...`);
 
       const url = `${this.serverUrl}/${getPath(this.talkerId, this.peerId)}`;
       const parcel: Parcel = {
@@ -255,11 +243,7 @@ export default class PipingChat extends Vue {
         body: JSON.stringify(parcel)
       });
 
-      this.talks.unshift({
-        kind: "system",
-        time: new Date(),
-        content: "Your public key sent."
-      });
+      this.echoSystemTalk("Your public key sent.");
       this.hasPublicKeySent = true;
       this.echoEstablishMessageIfNeed();
       console.log("res:", res);
@@ -296,11 +280,7 @@ export default class PipingChat extends Vue {
               this.peerPublicKey = parcel.content;
               console.log("Peer's public key:", parcel.content);
 
-              this.talks.unshift({
-                kind: "system",
-                time: new Date(),
-                content: "Peer's public key received."
-              });
+              this.echoSystemTalk("Peer's public key received.");
               this.hasPeerPublicKeyReceived = true;
               this.echoEstablishMessageIfNeed();
               break;
@@ -349,11 +329,7 @@ export default class PipingChat extends Vue {
     (async ()=>{
       const url = `${this.serverUrl}/${getPath(this.talkerId, this.peerId)}`;
       if(this.peerPublicKey === undefined) {
-        this.talks.unshift({
-          kind: "system",
-          time: new Date(),
-          content: "Peer's public key is not received yet."
-        });
+        this.echoSystemTalk("Peer's public key is not received yet.");
       } else {
         // Encrypt talk
         const encryptedTalk: string = RSA.encrypt(
