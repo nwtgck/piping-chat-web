@@ -14,7 +14,9 @@
           <textarea cols="80" rows="8" v-model="privateKey"></textarea>
         </details>
         Key bits: <input type="number" v-model="nKeyBits">
-        <button v-on:click="assignPrivateKey()">Regenerate keys</button>
+        <button v-on:click="assignPrivateKey()">Regenerate keys</button><br>
+        <button v-on:click="savePrivateKey()">Save private key</button>
+        <button v-on:click="erasePrivateKey()">Erase private key from storage</button>
         <h3>Peer's public key</h3>
         <textarea cols="80" rows="8" v-model="peerPublicKey"></textarea>
       </details>
@@ -134,6 +136,10 @@ const RSA = {
   }
 };
 
+const StorageKeys = {
+  PRIVATE_KEY: "PRIVATE_KEY_LOCAL_STORAGE_KEY"
+};
+
 @Component({
   components: {
     TimeAgo
@@ -188,7 +194,8 @@ export default class PipingChat extends Vue {
     });
   }
 
-  private async assignPrivateKey() {
+  // Assign a private key asynchronously
+  private async assignPrivateKey(): Promise<void> {
     // Echo generating message
     this.echoSystemTalk(`${this.nKeyBits}-bit key generating...`);
 
@@ -214,7 +221,34 @@ export default class PipingChat extends Vue {
   }
 
   mounted() {
-    this.assignPrivateKey();
+    const privateKey: string | null = localStorage.getItem(StorageKeys.PRIVATE_KEY);
+    // If private key is not found
+    if(privateKey === null) {
+      // Assign a private key asynchronously
+      this.assignPrivateKey();
+    } else {
+      this.privateKey = privateKey;
+      this.echoSystemTalk("🔑 Your private key loaded!");
+    }
+  }
+
+  private savePrivateKey(): void {
+    // If private is not invalid
+    if(this.privateKey !== "") {
+      // Save private key in local storage
+      localStorage.setItem(StorageKeys.PRIVATE_KEY, this.privateKey);
+      this.echoSystemTalk("Your private key saved.");
+    }
+  }
+
+  private erasePrivateKey(): void {
+    // If private key in storage not found
+    if(localStorage.getItem(StorageKeys.PRIVATE_KEY) === null) {
+      this.echoSystemTalk("Private key is not saved yet.");
+    } else {
+      localStorage.removeItem(StorageKeys.PRIVATE_KEY);
+      this.echoSystemTalk("Your private key erased from local storage.");
+    }
   }
 
   get isEstablished(): boolean {
