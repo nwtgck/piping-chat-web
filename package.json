@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "crypto-js": "^3.1.9-1",
+    "fork-me-on-github-vue": "^1.0.7",
     "jsencrypt": "^3.0.0-rc.1",
     "vue": "^2.6.6",
     "vue-class-component": "^7.0.2",
