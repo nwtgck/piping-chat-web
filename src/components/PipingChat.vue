@@ -54,6 +54,7 @@ import { Component, Prop, Vue } from 'vue-property-decorator';
 import TimeAgo from 'vue2-timeago'
 import * as jsencrypt from 'jsencrypt';
 import * as cryptojs from 'crypto-js';
+import{ PromiseSequentialContext } from "@/promise-sequential-context";
 
 type ParcelKind = "rsa_key" | "talk"
 
@@ -188,6 +189,9 @@ export default class PipingChat extends Vue {
   // Whether peer's public key received or not
   private hasPeerPublicKeyReceived: boolean = false;
 
+  private recieveSeqCtx = new PromiseSequentialContext();
+  private sendSeqCtx    = new PromiseSequentialContext();
+
   private echoSystemTalk(message: string): void {
     this.talks.unshift({
       kind: "system",
@@ -274,10 +278,12 @@ export default class PipingChat extends Vue {
         kind: "rsa_key",
         content: this.publicKey,
       };
-      const res = await fetch(url, {
-        method: "POST",
-        body: JSON.stringify(parcel)
-      });
+      const res = await this.sendSeqCtx.run(()=>
+        fetch(url, {
+          method: "POST",
+          body: JSON.stringify(parcel)
+        })
+      );
 
       this.echoSystemTalk("Your public key sent.");
       this.hasPublicKeySent = true;
@@ -291,9 +297,11 @@ export default class PipingChat extends Vue {
       while(true) {
         try {
           console.log(`Getting ${url}...`);
-          const res = await fetch(url, {
-            method: "GET"
-          });
+          const res = await this.recieveSeqCtx.run(()=>
+            fetch(url, {
+              method: "GET"
+            })
+          );
 
           if(res.body === null) {
             console.log("ERROR: Body not found");
@@ -379,18 +387,20 @@ export default class PipingChat extends Vue {
           kind: "talk",
           content: encryptedTalk,
         };
-        const res = await fetch(url, {
-          method: "POST",
-          body: JSON.stringify(parcel)
+        await this.sendSeqCtx.run(async () => {
+          const res = await fetch(url, {
+            method: "POST",
+            body: JSON.stringify(parcel)
+          });
+          if (res.body === null) {
+            this.echoSystemTalk("Unexpected error: send-body is null.");
+          } else {
+            // Wait for body being complete
+            await res.body.pipeTo(new WritableStream({}));
+            // Set arrived as true
+            userTalk.arrived = true;
+          }
         });
-        if(res.body === null) {
-          this.echoSystemTalk("Unexpected error: send-body is null.");
-        } else {
-          // Wait for body being complete
-          await res.body.pipeTo(new WritableStream({}));
-          // Set arrived as true
-          userTalk.arrived = true;
-        }
       }
     })();
   }
