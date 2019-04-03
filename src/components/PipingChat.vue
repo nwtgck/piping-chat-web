@@ -29,14 +29,15 @@
     <!-- History of talks-->
     <div>
       <div v-for="talk in talks" :class='{"me": talk.talkerId === talkerId}'>
-        <span v-if="talk.kind === 'user' && talk.talkerId !== talkerId">
-          <b>{{ talk.talkerId }}</b>
-          <time-ago :refresh="60" :datetime="talk.time" class="time"></time-ago><br>
-        </span>
-        <span v-if="talk.kind === 'user' && talk.talkerId === talkerId" class="time">
-          <time-ago :refresh="60" :datetime="talk.time"></time-ago>
-        </span>
         <span v-if="talk.kind === 'user'">
+          <div v-if="talk.talkerId !== talkerId">
+            <b>{{ talk.talkerId }}</b>
+            <time-ago :refresh="60" :datetime="talk.time" class="time"></time-ago><br>
+          </div>
+          <span v-if="talk.talkerId === talkerId">
+            {{ talk.arrived ? "✓" : "" }}
+            <time-ago :refresh="60" :datetime="talk.time" class="time"></time-ago>
+          </span>
         「{{ talk.content }}」
         </span>
         <span v-if="talk.kind === 'system'">
@@ -65,7 +66,8 @@ type UserTalk = {
   kind: "user";
   time: Date,
   talkerId: String,
-  content: String
+  content: String,
+  arrived: boolean,
 };
 
 type SystemTalk = {
@@ -329,7 +331,8 @@ export default class PipingChat extends Vue {
                 kind: "user",
                 time: new Date(),
                 talkerId: this.peerId,
-                content: decryptedTalk
+                content: decryptedTalk,
+                arrived: true
               };
 
               console.log("userTalk:", userTalk);
@@ -350,13 +353,15 @@ export default class PipingChat extends Vue {
   }
 
   sendTalk(): void {
-    // Push my talk
-    this.talks.unshift({
+    const userTalk: UserTalk = {
       kind: "user",
       time: new Date(),
       talkerId: this.talkerId,
-      content: this.talk
-    });
+      content: this.talk,
+      arrived: false,
+    };
+    // Push my talk
+    this.talks.unshift(userTalk);
     const myTalk: string = this.talk;
     this.talk = "";
 
@@ -378,6 +383,14 @@ export default class PipingChat extends Vue {
           method: "POST",
           body: JSON.stringify(parcel)
         });
+        if(res.body === null) {
+          this.echoSystemTalk("Unexpected error: send-body is null.");
+        } else {
+          // Wait for body being complete
+          await res.body.pipeTo(new WritableStream({}));
+          // Set arrived as true
+          userTalk.arrived = true;
+        }
       }
     })();
   }
