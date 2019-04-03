@@ -387,20 +387,20 @@ export default class PipingChat extends Vue {
           kind: "talk",
           content: encryptedTalk,
         };
-        const res = await this.sendSeqCtx.run(() =>
-          fetch(url, {
+        await this.sendSeqCtx.run(async () => {
+          const res = await fetch(url, {
             method: "POST",
             body: JSON.stringify(parcel)
-          })
-        );
-        if(res.body === null) {
-          this.echoSystemTalk("Unexpected error: send-body is null.");
-        } else {
-          // Wait for body being complete
-          await res.body.pipeTo(new WritableStream({}));
-          // Set arrived as true
-          userTalk.arrived = true;
-        }
+          });
+          if (res.body === null) {
+            this.echoSystemTalk("Unexpected error: send-body is null.");
+          } else {
+            // Wait for body being complete
+            await res.body.pipeTo(new WritableStream({}));
+            // Set arrived as true
+            userTalk.arrived = true;
+          }
+        });
       }
     })();
   }
