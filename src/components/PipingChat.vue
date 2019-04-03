@@ -281,6 +281,12 @@ export default class PipingChat extends Vue {
       const res = await this.sendSeqCtx.run(()=>
         fetch(url, {
           method: "POST",
+          headers: {
+            // TODO: This should be "application/json".
+            //       however, POST application/json triggers preflight request
+            //       and Piping Server doesn't support preflight request.
+            "content-type": "text/plain"
+          },
           body: JSON.stringify(parcel)
         })
       );
@@ -308,10 +314,29 @@ export default class PipingChat extends Vue {
             return;
           }
 
+          // Response JSON
+          const resJson: any = await (async ()=>{
+            // If content type is JSON
+            // TODO: This should be "application/json".
+            //       however, POST application/json triggers preflight request
+            //       and Piping Server doesn't support preflight request.
+            if(res.headers.get("content-type") === "text/plain") {
+              return res.json();
+            } else {
+              const text = await res.text();
+              console.log("TEXT:", text);
+              // Decrypt body text
+              const decryptedText: string = RSA.decrypt(
+                this.privateKey,
+                text
+              );
+              // Parse the text to JSON
+              return JSON.parse(decryptedText);
+            }
+          })();
+
           // Parse parcel
-          const parcel: Parcel | undefined = parseJsonToParcel(
-            await res.json()
-          );
+          const parcel: Parcel | undefined = parseJsonToParcel(resJson);
 
           if(parcel === undefined) {
             console.error(`Parse error: ${await res.json()}`);
@@ -329,17 +354,11 @@ export default class PipingChat extends Vue {
               this.echoEstablishMessageIfNeed();
               break;
             case "talk":
-              // Decrypt talk
-              const decryptedTalk: string = RSA.decrypt(
-                this.privateKey,
-                parcel.content
-              );
-
               const userTalk: UserTalk = {
                 kind: "user",
                 time: new Date(),
                 talkerId: this.peerId,
-                content: decryptedTalk,
+                content: parcel.content,
                 arrived: true
               };
 
@@ -378,19 +397,19 @@ export default class PipingChat extends Vue {
       if(this.peerPublicKey === undefined) {
         this.echoSystemTalk("Peer's public key is not received yet.");
       } else {
-        // Encrypt talk
-        const encryptedTalk: string = RSA.encrypt(
-          this.peerPublicKey,
-          myTalk
-        );
         const parcel: Parcel = {
           kind: "talk",
-          content: encryptedTalk,
+          content: myTalk,
         };
+        // Encrypt parcel
+        const encryptedParcelText = RSA.encrypt(
+          this.peerPublicKey,
+          JSON.stringify(parcel),
+        );
         await this.sendSeqCtx.run(async () => {
           const res = await fetch(url, {
             method: "POST",
-            body: JSON.stringify(parcel)
+            body: encryptedParcelText
           });
           if (res.body === null) {
             this.echoSystemTalk("Unexpected error: send-body is null.");
