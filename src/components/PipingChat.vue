@@ -215,6 +215,9 @@ export default class PipingChat extends Vue {
   // Peer's public key
   peerPublicCryptoKey?: CryptoKey;
 
+  // Initialization vector size
+  readonly aesGcmIvLength: number = 12;
+
   // My public key
   get publicKey(): string {
     if (this.privateKey === "") {
@@ -388,9 +391,8 @@ export default class PipingChat extends Vue {
               // Get body
               const body: Uint8Array = await getBodyBytesFromResponse(res);
               // Split body into IV and encrypted parcel
-              // TODO: Hard code: 12
-              const iv = body.slice(0, 12);
-              const encryptedParcel = body.slice(12);
+              const iv = body.slice(0, this.aesGcmIvLength);
+              const encryptedParcel = body.slice(this.aesGcmIvLength);
               console.log("body:", body);
               // Get secret key
               const secretKey = await this.getSecretKey(this.peerPublicCryptoKey);
@@ -492,7 +494,7 @@ export default class PipingChat extends Vue {
           content: myTalk,
         };
         // Create an initialization vector
-        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const iv = crypto.getRandomValues(new Uint8Array(this.aesGcmIvLength));
         // Get secret key
         const secretKey = await this.getSecretKey(this.peerPublicCryptoKey);
         // Encrypt parcel
