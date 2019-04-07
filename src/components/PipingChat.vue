@@ -5,21 +5,22 @@
       Your ID: <input type="text" v-model="talkerId"><br>
       Peer ID: <input type="text" v-model="peerId" placeholder="e.g. bma"><br>
       <button v-on:click="connectToPeer()">Connect</button><br>
-      <details>
-        <summary>Advanced</summary>
-        <h3>Your public key</h3>
-        <textarea cols="80" rows="8" v-model="publicKey" disabled></textarea>
-        <details>
-          <summary>Your private key (editable)</summary>
-          <textarea cols="80" rows="8" v-model="privateKey"></textarea>
-        </details>
-        Key bits: <input type="number" v-model="nKeyBits">
-        <button v-on:click="assignPrivateKey()">Regenerate keys</button><br>
-        <button v-on:click="savePrivateKey()">Save private key</button>
-        <button v-on:click="erasePrivateKey()">Erase private key from storage</button>
-        <h3>Peer's public key</h3>
-        <textarea cols="80" rows="8" v-model="peerPublicKey"></textarea>
-      </details>
+<!--      TODO: Use later for certification-->
+<!--      <details>-->
+<!--        <summary>Advanced</summary>-->
+<!--        <h3>Your public key</h3>-->
+<!--        <textarea cols="80" rows="8" v-model="publicKey" disabled></textarea>-->
+<!--        <details>-->
+<!--          <summary>Your private key (editable)</summary>-->
+<!--          <textarea cols="80" rows="8" v-model="privateKey"></textarea>-->
+<!--        </details>-->
+<!--        Key bits: <input type="number" v-model="nKeyBits">-->
+<!--        <button v-on:click="assignPrivateKey()">Regenerate keys</button><br>-->
+<!--        <button v-on:click="savePrivateKey()">Save private key</button>-->
+<!--        <button v-on:click="erasePrivateKey()">Erase private key from storage</button>-->
+<!--        <h3>Peer's public key</h3>-->
+<!--        <textarea cols="80" rows="8" v-model="peerPublicKey"></textarea>-->
+<!--      </details>-->
     </p>
     <hr>
     <p>
@@ -89,14 +90,6 @@ function getRandomId(len: number): string {
 
   const randomArr = window.crypto.getRandomValues(new Uint32Array(len));
   return Array.from(randomArr).map(n => chars[n % chars.length]).join('');
-}
-
-function stringToUint8Array(str: string): Uint8Array {
-  const array = new Uint8Array(str.length);
-  for(let i = 0; i < str.length; i++) {
-    array[i] = str.charCodeAt(i);
-  }
-  return array;
 }
 
 async function getBodyBytesFromResponse(res: Response): Promise<Uint8Array> {
@@ -405,7 +398,9 @@ export default class PipingChat extends Vue {
               // Parse the text to JSON
               return JSON.parse(
                 // TODO: any
-                String.fromCharCode.apply(null, new Uint8Array(decryptedParcel) as any)
+                // String.fromCharCode.apply(null, new Uint8Array(decryptedParcel) as any)
+                // (from: https://stackoverflow.com/a/41180394/2885946)
+                new TextDecoder().decode(decryptedParcel)
               );
             }
           })();
@@ -501,7 +496,8 @@ export default class PipingChat extends Vue {
         const encryptedParcel: ArrayBuffer = await crypto.subtle.encrypt(
           { name: 'AES-GCM', iv, tagLength: 128 },
           secretKey,
-          stringToUint8Array(JSON.stringify(parcel))
+          // (from: https://stackoverflow.com/a/41180394/2885946)
+          new TextEncoder().encode(JSON.stringify(parcel))
         );
         await this.sendSeqCtx.run(async () => {
           const res = await fetch(url, {
