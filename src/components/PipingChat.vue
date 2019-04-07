@@ -56,11 +56,11 @@ import * as jsencrypt from 'jsencrypt';
 import * as cryptojs from 'crypto-js';
 import{ PromiseSequentialContext } from "@/promise-sequential-context";
 
-type ParcelKind = "rsa_key" | "talk"
+type ParcelKind = "ecdh_public_jwk" | "talk";
 
 type Parcel = {
   kind: ParcelKind,
-  content: string
+  content: string | JsonWebKey
 };
 
 type UserTalk = {
@@ -91,6 +91,44 @@ function getRandomId(len: number): string {
   return Array.from(randomArr).map(n => chars[n % chars.length]).join('');
 }
 
+function stringToUint8Array(str: string): Uint8Array {
+  const array = new Uint8Array(str.length);
+  for(let i = 0; i < str.length; i++) {
+    array[i] = str.charCodeAt(i);
+  }
+  return array;
+}
+
+async function getBodyBytesFromResponse(res: Response): Promise<Uint8Array> {
+  if(res.body === null) {
+    return new Uint8Array();
+  }
+  const reader = res.body.getReader();
+  const arrays = [];
+  let totalLen = 0;
+  while(true) {
+    const {done, value} = await reader.read();
+    if(done) break;
+    totalLen += value.byteLength;
+    arrays.push(value);
+  }
+  // (from: https://qiita.com/hbjpn/items/dc4fbb925987d284f491)
+  const allArray = new Uint8Array(totalLen);
+  let pos = 0;
+  for(const arr of arrays) {
+    allArray.set(arr, pos);
+    pos += arr.byteLength;
+  }
+  return allArray;
+}
+
+function mergeUint8Array(a: Uint8Array, b: Uint8Array): Uint8Array {
+  const merged = new Uint8Array(a.byteLength + b.byteLength);
+  merged.set(a, 0);
+  merged.set(b, a.byteLength);
+  return merged
+}
+
 function getPath(toId: string, fromId: string): string {
   return cryptojs.SHA256(`${toId}-to-${fromId}`).toString();
 }
@@ -104,7 +142,7 @@ function parseJsonToParcel(json: any): Parcel | undefined {
     return undefined;
   }
   switch (json.kind) {
-    case "rsa_key":
+    case "ecdh_public_jwk":
     case "talk":
       return {
         kind: json.kind,
@@ -167,6 +205,16 @@ export default class PipingChat extends Vue {
   // Peer's public key
   peerPublicKey: string = "";
 
+  // My key pair
+  keyPairPromise: PromiseLike<CryptoKeyPair> = window.crypto.subtle.generateKey(
+    { name: 'ECDH', namedCurve: 'P-256'},
+    false,
+    ['deriveKey', 'deriveBits']
+  );
+
+  // Peer's public key
+  peerPublicCryptoKey?: CryptoKey;
+
   // My public key
   get publicKey(): string {
     if (this.privateKey === "") {
@@ -202,6 +250,9 @@ export default class PipingChat extends Vue {
 
   // Assign a private key asynchronously
   private async assignPrivateKey(): Promise<void> {
+    // TODO: do something
+    return;
+
     // Echo generating message
     this.echoSystemTalk(`${this.nKeyBits}-bit key generating...`);
 
@@ -273,11 +324,18 @@ export default class PipingChat extends Vue {
     (async ()=>{
       this.echoSystemTalk(`Sending your public key to "${this.peerId}"...`);
 
+      // Get public JWK
+      const publicJwk: JsonWebKey = await crypto.subtle.exportKey(
+        'jwk',
+        (await this.keyPairPromise).publicKey
+      );
+
       const url = `${this.serverUrl}/${getPath(this.talkerId, this.peerId)}`;
       const parcel: Parcel = {
-        kind: "rsa_key",
-        content: this.publicKey,
+        kind: "ecdh_public_jwk",
+        content: publicJwk,
       };
+      console.log('parcel:', JSON.stringify(parcel));
       const res = await this.sendSeqCtx.run(()=>
         fetch(url, {
           method: "POST",
@@ -323,15 +381,30 @@ export default class PipingChat extends Vue {
             if(res.headers.get("content-type") === "text/plain") {
               return res.json();
             } else {
-              const text = await res.text();
-              console.log("TEXT:", text);
+              if( this.peerPublicCryptoKey === undefined ) {
+                console.error("Error: this.peerPublicCryptoKey is undefined");
+                return {};
+              }
+              // Get body
+              const body: Uint8Array = await getBodyBytesFromResponse(res);
+              // Split body into IV and encrypted parcel
+              // TODO: Hard code: 12
+              const iv = body.slice(0, 12);
+              const encryptedParcel = body.slice(12);
+              console.log("body:", body);
+              // Get secret key
+              const secretKey = await this.getSecretKey(this.peerPublicCryptoKey);
               // Decrypt body text
-              const decryptedText: string = RSA.decrypt(
-                this.privateKey,
-                text
+              const decryptedParcel: ArrayBuffer = await crypto.subtle.decrypt(
+                { name: 'AES-GCM', iv, tagLength: 128 },
+                secretKey,
+                encryptedParcel
               );
               // Parse the text to JSON
-              return JSON.parse(decryptedText);
+              return JSON.parse(
+                // TODO: any
+                String.fromCharCode.apply(null, new Uint8Array(decryptedParcel) as any)
+              );
             }
           })();
 
@@ -344,16 +417,33 @@ export default class PipingChat extends Vue {
           }
 
           switch (parcel.kind) {
-            case "rsa_key":
-              // Set peer's public key
-              this.peerPublicKey = parcel.content;
-              console.log("Peer's public key:", parcel.content);
+            case "ecdh_public_jwk":
+              if (typeof parcel.content === "string") {
+                console.error(`Unexpected content: ${parcel.content}`);
+                break;
+              }
+              // Set peer's public JWK
+              const peerPublicJwk: JsonWebKey = parcel.content;
+              console.log("Peer's public JWK:", peerPublicJwk);
+
+              // Assign peer's public JWK by import
+              this.peerPublicCryptoKey = await crypto.subtle.importKey(
+                'jwk',
+                peerPublicJwk,
+                {name: 'ECDH', namedCurve: 'P-256'},
+                false,
+                []
+              );
 
               this.echoSystemTalk("Peer's public key received.");
               this.hasPeerPublicKeyReceived = true;
               this.echoEstablishMessageIfNeed();
               break;
             case "talk":
+              if (typeof parcel.content !== "string") {
+                console.error(`Unexpected content: ${parcel.content}`);
+                break;
+              }
               const userTalk: UserTalk = {
                 kind: "user",
                 time: new Date(),
@@ -394,22 +484,27 @@ export default class PipingChat extends Vue {
 
     (async ()=>{
       const url = `${this.serverUrl}/${getPath(this.talkerId, this.peerId)}`;
-      if(this.peerPublicKey === undefined) {
+      if(this.peerPublicCryptoKey === undefined) {
         this.echoSystemTalk("Peer's public key is not received yet.");
       } else {
         const parcel: Parcel = {
           kind: "talk",
           content: myTalk,
         };
+        // Create an initialization vector
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        // Get secret key
+        const secretKey = await this.getSecretKey(this.peerPublicCryptoKey);
         // Encrypt parcel
-        const encryptedParcelText = RSA.encrypt(
-          this.peerPublicKey,
-          JSON.stringify(parcel),
+        const encryptedParcel: ArrayBuffer = await crypto.subtle.encrypt(
+          { name: 'AES-GCM', iv, tagLength: 128 },
+          secretKey,
+          stringToUint8Array(JSON.stringify(parcel))
         );
         await this.sendSeqCtx.run(async () => {
           const res = await fetch(url, {
             method: "POST",
-            body: encryptedParcelText
+            body: mergeUint8Array(iv, new Uint8Array(encryptedParcel))
           });
           if (res.body === null) {
             this.echoSystemTalk("Unexpected error: send-body is null.");
@@ -422,6 +517,16 @@ export default class PipingChat extends Vue {
         });
       }
     })();
+  }
+
+  private async getSecretKey(peerPublicCryptoKey: CryptoKey): Promise<CryptoKey> {
+    return crypto.subtle.deriveKey(
+      { name: 'ECDH', public: peerPublicCryptoKey },
+      (await this.keyPairPromise).privateKey,
+      {'name': 'AES-GCM', length: 128},
+      false,
+      ['encrypt', 'decrypt']
+    );
   }
 
 }
