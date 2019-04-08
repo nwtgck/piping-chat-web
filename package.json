@@ -11,6 +11,7 @@
     "fork-me-on-github-vue": "^1.0.7",
     "jsencrypt": "^3.0.0-rc.1",
     "vue": "^2.6.6",
+    "vue-async-computed": "^3.6.1",
     "vue-class-component": "^7.0.2",
     "vue-property-decorator": "^8.0.0",
     "vue2-timeago": "^1.1.3",

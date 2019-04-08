@@ -6,21 +6,21 @@
       Peer ID: <input type="text" v-model="peerId" placeholder="e.g. bma"><br>
       <button v-on:click="connectToPeer()">Connect</button><br>
 <!--      TODO: Use later for certification-->
-<!--      <details>-->
-<!--        <summary>Advanced</summary>-->
-<!--        <h3>Your public key</h3>-->
-<!--        <textarea cols="80" rows="8" v-model="publicKey" disabled></textarea>-->
-<!--        <details>-->
-<!--          <summary>Your private key (editable)</summary>-->
-<!--          <textarea cols="80" rows="8" v-model="privateKey"></textarea>-->
-<!--        </details>-->
+      <details>
+        <summary>Advanced</summary>
+        <h4>Your public JWK</h4>
+        <textarea cols="80" rows="8" v-model="publicJwkString" disabled></textarea>
+        <details>
+          <summary>Your private JWK</summary>
+          <textarea cols="80" rows="8" v-model="privateJwkString" disabled></textarea>
+        </details>
 <!--        Key bits: <input type="number" v-model="nKeyBits">-->
 <!--        <button v-on:click="assignPrivateKey()">Regenerate keys</button><br>-->
 <!--        <button v-on:click="savePrivateKey()">Save private key</button>-->
 <!--        <button v-on:click="erasePrivateKey()">Erase private key from storage</button>-->
-<!--        <h3>Peer's public key</h3>-->
-<!--        <textarea cols="80" rows="8" v-model="peerPublicKey"></textarea>-->
-<!--      </details>-->
+        <h4>Peer's public JWK</h4>
+        <textarea cols="80" rows="8" v-model="peerPublicJwkString" disabled></textarea>
+      </details>
     </p>
     <hr>
     <p>
@@ -51,11 +51,12 @@
 </template>
 
 <script lang="ts">
-import { Component, Prop, Vue } from 'vue-property-decorator';
+import {Component, Vue} from 'vue-property-decorator';
 import TimeAgo from 'vue2-timeago'
 import * as jsencrypt from 'jsencrypt';
 import * as cryptojs from 'crypto-js';
-import{ PromiseSequentialContext } from "@/promise-sequential-context";
+import {PromiseSequentialContext} from "@/promise-sequential-context";
+import {AsyncComputed} from "@/AsyncComputed";
 
 type ParcelKind = "ecdh_public_jwk" | "talk";
 
@@ -201,7 +202,7 @@ export default class PipingChat extends Vue {
   // My key pair
   keyPairPromise: PromiseLike<CryptoKeyPair> = window.crypto.subtle.generateKey(
     { name: 'ECDH', namedCurve: 'P-256'},
-    false,
+    true,
     ['deriveKey', 'deriveBits']
   );
 
@@ -235,6 +236,34 @@ export default class PipingChat extends Vue {
 
   private recieveSeqCtx = new PromiseSequentialContext();
   private sendSeqCtx    = new PromiseSequentialContext();
+
+  @AsyncComputed()
+  async publicJwkString(): Promise<string>{
+    const jwk = await window.crypto.subtle.exportKey('jwk', (await this.keyPairPromise).publicKey);
+    return JSON.stringify(jwk, null, "  ");
+  }
+
+  @AsyncComputed()
+  async privateJwkString(): Promise<string>{
+    const jwk = await window.crypto.subtle.exportKey('jwk', (await this.keyPairPromise).privateKey);
+    return JSON.stringify(jwk, null, "  ");
+  }
+
+  @AsyncComputed()
+  async peerPublicJwkString(): Promise<string> {
+    const self = this;
+    return new Promise(resolve => {
+      // Watch peerPublicCryptoKey
+      (async function loop(){
+        if(self.peerPublicCryptoKey === undefined) {
+          setTimeout(loop, 1000);
+        } else {
+          const jwk = await window.crypto.subtle.exportKey('jwk', self.peerPublicCryptoKey);
+          resolve(JSON.stringify(jwk, null, "  "));
+        }
+      })();
+    });
+  }
 
   private echoSystemTalk(message: string): void {
     this.talks.unshift({
@@ -428,7 +457,7 @@ export default class PipingChat extends Vue {
                 'jwk',
                 peerPublicJwk,
                 {name: 'ECDH', namedCurve: 'P-256'},
-                false,
+                true,
                 []
               );
 
