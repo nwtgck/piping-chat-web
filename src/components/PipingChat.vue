@@ -71,9 +71,7 @@ import {PromiseSequentialContext} from "@/promise-sequential-context";
 import {AsyncComputed} from "@/AsyncComputed";
 import { pem2jwk } from 'pem-jwk';
 
-async function pubRsaPemToPubKey(publicPem: string): Promise<CryptoKey> {
-  // TODO: Hard code alg
-  const alg = { name: 'RSASSA-PKCS1-v1_5', hash: { name: "SHA-256" }};
+async function pubRsaPemToPubKey(alg: RsaHashedImportParams, publicPem: string): Promise<CryptoKey> {
   // Get public and private JWKs
   const pubJwk: JsonWebKey  = pem2jwk(publicPem);
   return window.crypto.subtle.importKey(
@@ -85,9 +83,7 @@ async function pubRsaPemToPubKey(publicPem: string): Promise<CryptoKey> {
   );
 }
 
-async function privRsaPemToPubPrivKeys(privatePem: string): Promise<{ publicKey: CryptoKey, privateKey: CryptoKey }> {
-  // TODO: Hard code alg
-  const alg = { name: 'RSASSA-PKCS1-v1_5', hash: { name: "SHA-256" }};
+async function privRsaPemToPubPrivKeys(alg: RsaHashedImportParams, privatePem: string): Promise<{ publicKey: CryptoKey, privateKey: CryptoKey }> {
   // Compute public key by the private key
   const crypt = new jsencrypt.JSEncrypt();
   crypt.setPrivateKey(privatePem);
@@ -97,7 +93,7 @@ async function privRsaPemToPubPrivKeys(privatePem: string): Promise<{ publicKey:
   const privJwk: JsonWebKey = pem2jwk(privatePem);
 
   return {
-    publicKey: await pubRsaPemToPubKey(publicPem),
+    publicKey: await pubRsaPemToPubKey(alg, publicPem),
     privateKey: await window.crypto.subtle.importKey(
       'jwk',
       privJwk,
@@ -293,9 +289,7 @@ export default class PipingChat extends Vue {
   // Initialization vector size
   readonly aesGcmIvLength: number = 12;
 
-  // TODO: default should be false;
   enableSignature = false;
-
   privateSignPem = "";
   peerPublicSignPem = "";
 
@@ -452,7 +446,7 @@ export default class PipingChat extends Vue {
       const signature: string | undefined = await (async ()=>{
         if (this.enableSignature) {
           // Get private key by PEM
-          const { privateKey } = await privRsaPemToPubPrivKeys(this.privateSignPem);
+          const { privateKey } = await privRsaPemToPubPrivKeys(this.signAlg, this.privateSignPem);
           // Sign
           const signatureBuff: ArrayBuffer = await window.crypto.subtle.sign(
             this.signAlg,
@@ -574,7 +568,7 @@ export default class PipingChat extends Vue {
                 const signatureBuff: ArrayBuffer = stringToArrayBuffer(atob(signature));
 
                 // Get peer's public key
-                const peerPublicKey = await pubRsaPemToPubKey(this.peerPublicSignPem);
+                const peerPublicKey = await pubRsaPemToPubKey(this.signAlg, this.peerPublicSignPem);
 
                 // Peer's JWK
                 const signData: ArrayBuffer = stringToArrayBuffer(getSignDataFromJwk(peerPublicJwk));
