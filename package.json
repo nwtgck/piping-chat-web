@@ -10,6 +10,7 @@
     "crypto-js": "^3.1.9-1",
     "fork-me-on-github-vue": "^1.0.7",
     "jsencrypt": "^3.0.0-rc.1",
+    "pem-jwk": "^2.0.0",
     "vue": "^2.6.6",
     "vue-async-computed": "^3.6.1",
     "vue-class-component": "^7.0.2",
@@ -24,6 +25,7 @@
   "author": "Ryo Ota <nwtgck@gmail.com> (https://github.com/nwtgck)",
   "devDependencies": {
     "@types/crypto-js": "^3.1.43",
+    "@types/pem-jwk": "^1.5.0",
     "@types/whatwg-fetch": "0.0.33",
     "@vue/cli-plugin-babel": "^3.5.5",
     "@vue/cli-plugin-typescript": "^3.5.0",

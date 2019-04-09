@@ -5,21 +5,33 @@
       Your ID: <input type="text" v-model="talkerId"><br>
       Peer ID: <input type="text" v-model="peerId" placeholder="e.g. bma"><br>
       <button v-on:click="connectToPeer()">Connect</button><br>
+      <input type="checkbox" v-model="enableSignature"> Enable connect with signature<br>
 <!--      TODO: Use later for certification-->
       <details>
         <summary>Advanced</summary>
-        <h4>Your public JWK</h4>
-        <textarea cols="80" rows="8" v-model="publicJwkString" disabled></textarea>
+        <h3>For signature</h3>
         <details>
-          <summary>Your private JWK</summary>
-          <textarea cols="80" rows="8" v-model="privateJwkString" disabled></textarea>
+          <summary>Your private RSA PEM</summary>
+          <textarea v-model="privateSignPem" cols="80" rows="10"></textarea>
         </details>
-<!--        Key bits: <input type="number" v-model="nKeyBits">-->
-<!--        <button v-on:click="assignPrivateKey()">Regenerate keys</button><br>-->
-<!--        <button v-on:click="savePrivateKey()">Save private key</button>-->
-<!--        <button v-on:click="erasePrivateKey()">Erase private key from storage</button>-->
-        <h4>Peer's public JWK</h4>
-        <textarea cols="80" rows="8" v-model="peerPublicJwkString" disabled></textarea>
+        <h4>Peer's public RSA PEM</h4>
+        <textarea cols="80" rows="8" v-model="peerPublicSignPem"></textarea>
+
+        <details>
+          <summary>For encryption</summary>
+          <h4>Your public JWK</h4>
+          <textarea cols="80" rows="8" v-model="publicJwkString" disabled></textarea>
+          <details>
+            <summary>Your private JWK</summary>
+            <textarea cols="80" rows="8" v-model="privateJwkString" disabled></textarea>
+          </details>
+          <!--        Key bits: <input type="number" v-model="nKeyBits">-->
+          <!--        <button v-on:click="assignPrivateKey()">Regenerate keys</button><br>-->
+          <!--        <button v-on:click="savePrivateKey()">Save private key</button>-->
+          <!--        <button v-on:click="erasePrivateKey()">Erase private key from storage</button>-->
+          <h4>Peer's public JWK</h4>
+          <textarea cols="80" rows="8" v-model="peerPublicJwkString" disabled></textarea>
+        </details>
       </details>
     </p>
     <hr>
@@ -57,10 +69,65 @@ import * as jsencrypt from 'jsencrypt';
 import * as cryptojs from 'crypto-js';
 import {PromiseSequentialContext} from "@/promise-sequential-context";
 import {AsyncComputed} from "@/AsyncComputed";
+import { pem2jwk } from 'pem-jwk';
+
+async function pubRsaPemToPubKey(publicPem: string): Promise<CryptoKey> {
+  // TODO: Hard code alg
+  const alg = { name: 'RSASSA-PKCS1-v1_5', hash: { name: "SHA-256" }};
+  // Get public and private JWKs
+  const pubJwk: JsonWebKey  = pem2jwk(publicPem);
+  return window.crypto.subtle.importKey(
+    'jwk',
+    pubJwk,
+    alg,
+    true,
+    ['verify']
+  );
+}
+
+async function privRsaPemToPubPrivKeys(privatePem: string): Promise<{ publicKey: CryptoKey, privateKey: CryptoKey }> {
+  // TODO: Hard code alg
+  const alg = { name: 'RSASSA-PKCS1-v1_5', hash: { name: "SHA-256" }};
+  // Compute public key by the private key
+  const crypt = new jsencrypt.JSEncrypt();
+  crypt.setPrivateKey(privatePem);
+  const publicPem = crypt.getPublicKey();
+
+  // Get private JWK
+  const privJwk: JsonWebKey = pem2jwk(privatePem);
+
+  return {
+    publicKey: await pubRsaPemToPubKey(publicPem),
+    privateKey: await window.crypto.subtle.importKey(
+      'jwk',
+      privJwk,
+      alg,
+      true,
+      ['sign']
+    )
+  }
+}
+
+
+function arrayBufferToString(arr: ArrayBuffer){
+  return String.fromCharCode(... new Uint8Array(arr));
+}
+
+// (from: https://gist.github.com/kawanet/352a2ed1d1656816b2bc)
+function stringToArrayBuffer(str: string): ArrayBuffer {
+  const numbers: number[] = [].map.call(str, (c: string)=>{
+    return c.charCodeAt(0);
+  }) as any; // TODO: Not use any
+  return new Uint8Array(numbers).buffer;
+}
+
 
 type EcdhPublicJwkParcel = {
   kind: "ecdh_public_jwk",
-  content: JsonWebKey
+  content: {
+    jwk: JsonWebKey,
+    signature?: string
+  }
 };
 
 type TalkParcel = {
@@ -176,6 +243,15 @@ const RSA = {
   }
 };
 
+
+// (NOTE: The reason not to use JSON.stringify() is that I'm not sure the order of items is always same.)
+// TODO: Remove it and Use JWK thumbprint instead
+function getSignDataFromJwk(jwk: JsonWebKey): string {
+  // JSON string sorted by keys
+  // (from: https://stackoverflow.com/a/16168003/2885946)
+  return JSON.stringify(jwk, Object.keys(jwk));
+}
+
 const StorageKeys = {
   PRIVATE_KEY: "PRIVATE_KEY_LOCAL_STORAGE_KEY"
 };
@@ -216,6 +292,12 @@ export default class PipingChat extends Vue {
 
   // Initialization vector size
   readonly aesGcmIvLength: number = 12;
+
+  // TODO: default should be false;
+  enableSignature = false;
+
+  privateSignPem = "";
+  peerPublicSignPem = "";
 
   // My public key
   get publicKey(): string {
@@ -349,21 +431,47 @@ export default class PipingChat extends Vue {
     }
   }
 
+  // Algorithm for signature
+  signAlg = { name: 'RSASSA-PKCS1-v1_5', hash: { name: "SHA-256" }};
+
+
   connectToPeer(): void {
     // Send my public key
     (async ()=>{
       this.echoSystemTalk(`Sending your public key to "${this.peerId}"...`);
 
-      // Get public JWK
+      // Get public JWK for encryption
       const publicJwk: JsonWebKey = await crypto.subtle.exportKey(
         'jwk',
         (await this.keyPairPromise).publicKey
       );
 
       const url = `${this.serverUrl}/${getPath(this.talkerId, this.peerId)}`;
-      const parcel: Parcel = {
+
+      // Signature of public encryption JWK
+      const signature: string | undefined = await (async ()=>{
+        if (this.enableSignature) {
+          // Get private key by PEM
+          const { privateKey } = await privRsaPemToPubPrivKeys(this.privateSignPem);
+          // Sign
+          const signatureBuff: ArrayBuffer = await window.crypto.subtle.sign(
+            this.signAlg,
+            privateKey,
+            stringToArrayBuffer(getSignDataFromJwk(publicJwk))
+          );
+          // Base64 encode
+          return btoa(arrayBufferToString(signatureBuff));
+        } else {
+          return undefined;
+        }
+      })();
+
+      const parcel: EcdhPublicJwkParcel = {
         kind: "ecdh_public_jwk",
-        content: publicJwk,
+        content: {
+          jwk: publicJwk,
+          signature: signature
+        },
       };
       console.log('parcel:', JSON.stringify(parcel));
       const res = await this.sendSeqCtx.run(()=>
@@ -450,8 +558,44 @@ export default class PipingChat extends Vue {
           switch (parcel.kind) {
             case "ecdh_public_jwk":
               // Set peer's public JWK
-              const peerPublicJwk: JsonWebKey = parcel.content;
+              const peerPublicJwk: JsonWebKey = parcel.content.jwk;
               console.log("Peer's public JWK:", peerPublicJwk);
+
+              // If signature connection is enable
+              if (this.enableSignature) {
+                const signature =  parcel.content.signature;
+                // If no signature
+                if (signature === undefined) {
+                  this.echoSystemTalk("Error: establishment failed because peer has no signature");
+                  break;
+                }
+
+                // Decode base64
+                const signatureBuff: ArrayBuffer = stringToArrayBuffer(atob(signature));
+
+                // Get peer's public key
+                const peerPublicKey = await pubRsaPemToPubKey(this.peerPublicSignPem);
+
+                // Peer's JWK
+                const signData: ArrayBuffer = stringToArrayBuffer(getSignDataFromJwk(peerPublicJwk));
+
+                const verified = await window.crypto.subtle.verify(
+                  this.signAlg,
+                  peerPublicKey,
+                  signatureBuff,
+                  signData
+                );
+
+                console.log('verified:', verified);
+
+                if (verified) {
+                  this.echoSystemTalk("Peer was verified!");
+                } else {
+                  this.echoSystemTalk("Error: Peer was not verified.");
+                  this.echoSystemTalk("Error: Connection was not established.");
+                  break;
+                }
+              }
 
               // Assign peer's public JWK by import
               this.peerPublicCryptoKey = await crypto.subtle.importKey(
