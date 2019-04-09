@@ -58,12 +58,17 @@ import * as cryptojs from 'crypto-js';
 import {PromiseSequentialContext} from "@/promise-sequential-context";
 import {AsyncComputed} from "@/AsyncComputed";
 
-type ParcelKind = "ecdh_public_jwk" | "talk";
-
-type Parcel = {
-  kind: ParcelKind,
-  content: string | JsonWebKey
+type EcdhPublicJwkParcel = {
+  kind: "ecdh_public_jwk",
+  content: JsonWebKey
 };
+
+type TalkParcel = {
+  kind: "talk",
+  content: string
+};
+
+type Parcel = EcdhPublicJwkParcel | TalkParcel;
 
 type UserTalk = {
   kind: "user";
@@ -444,10 +449,6 @@ export default class PipingChat extends Vue {
 
           switch (parcel.kind) {
             case "ecdh_public_jwk":
-              if (typeof parcel.content === "string") {
-                console.error(`Unexpected content: ${parcel.content}`);
-                break;
-              }
               // Set peer's public JWK
               const peerPublicJwk: JsonWebKey = parcel.content;
               console.log("Peer's public JWK:", peerPublicJwk);
@@ -466,10 +467,6 @@ export default class PipingChat extends Vue {
               this.echoEstablishMessageIfNeed();
               break;
             case "talk":
-              if (typeof parcel.content !== "string") {
-                console.error(`Unexpected content: ${parcel.content}`);
-                break;
-              }
               const userTalk: UserTalk = {
                 kind: "user",
                 time: new Date(),
