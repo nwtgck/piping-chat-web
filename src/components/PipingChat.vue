@@ -107,6 +107,7 @@ type Talk = UserTalk | SystemTalk;
  * @param len
  */
 function getRandomId(len: number): string {
+  // NOTE: some similar shaped alphabets are not used
   const alphas  = ["a", "b", "c", "d", "e", "f", "h", "i", "j", "k", "m", "n", "p", "r", "s", "t", "u", "v", "w", "x", "y", "z"];
   const chars   = [...alphas];
 
@@ -192,6 +193,9 @@ export default class PipingChat extends Vue {
   enableSignature = false;
   privateSignPem = "";
   peerPublicSignPem = "";
+
+  // Algorithm for signature
+  signAlg = { name: 'RSASSA-PKCS1-v1_5', hash: { name: "SHA-256" }};
 
   // My public key
   get publicKey(): string {
@@ -325,209 +329,209 @@ export default class PipingChat extends Vue {
     }
   }
 
-  // Algorithm for signature
-  signAlg = { name: 'RSASSA-PKCS1-v1_5', hash: { name: "SHA-256" }};
-
-
   connectToPeer(): void {
     // Send my public key
-    (async ()=>{
-      this.echoSystemTalk(`Sending your public key to "${this.peerId}"...`);
-
-      // Get public JWK for encryption
-      const publicJwk: JsonWebKey = await crypto.subtle.exportKey(
-        'jwk',
-        (await this.keyPairPromise).publicKey
-      );
-
-      const url = `${this.serverUrl}/${getPath(this.talkerId, this.peerId)}`;
-
-      // Signature of public encryption JWK
-      const signature: string | undefined = await (async ()=>{
-        if (this.enableSignature) {
-          // Get private key by PEM
-          const { privateKey } = await utils.privRsaPemToPubPrivKeys(this.signAlg, this.privateSignPem);
-          // Sign
-          const signatureBuff: ArrayBuffer = await window.crypto.subtle.sign(
-            this.signAlg,
-            privateKey,
-            utils.stringToArrayBuffer(getSignDataFromJwk(publicJwk))
-          );
-          // Base64 encode
-          return btoa(utils.arrayBufferToString(signatureBuff));
-        } else {
-          return undefined;
-        }
-      })();
-
-      const parcel: EcdhPublicJwkParcel = {
-        kind: "ecdh_public_jwk",
-        content: {
-          jwk: publicJwk,
-          signature: signature
-        },
-      };
-      console.log('parcel:', JSON.stringify(parcel));
-      const res = await this.sendSeqCtx.run(()=>
-        fetch(url, {
-          method: "POST",
-          headers: {
-            // TODO: This should be "application/json".
-            //       however, POST application/json triggers preflight request
-            //       and Piping Server doesn't support preflight request.
-            "content-type": "text/plain"
-          },
-          body: JSON.stringify(parcel)
-        })
-      );
-
-      this.echoSystemTalk("Your public key sent.");
-      this.hasPublicKeySent = true;
-      this.echoEstablishMessageIfNeed();
-      console.log("res:", res);
-    })();
+    this.sendPublicKey();
 
     // Get-loop of peer's message
-    (async ()=>{
-      const url = `${this.serverUrl}/${getPath(this.peerId, this.talkerId)}`;
-      while(true) {
-        try {
-          console.log(`Getting ${url}...`);
-          const res = await this.recieveSeqCtx.run(()=>
-            fetch(url, {
-              method: "GET"
-            })
-          );
+    this.receiveParcelLoop();
+  }
 
-          if(res.body === null) {
-            console.log("ERROR: Body not found");
-            return;
-          }
+  async sendPublicKey() {
+    this.echoSystemTalk(`Sending your public key to "${this.peerId}"...`);
 
-          // Response JSON
-          const resJson: any = await (async ()=>{
-            // If content type is JSON
-            // TODO: This should be "application/json".
-            //       however, POST application/json triggers preflight request
-            //       and Piping Server doesn't support preflight request.
-            if(res.headers.get("content-type") === "text/plain") {
-              return res.json();
-            } else {
-              if( this.peerPublicCryptoKey === undefined ) {
-                console.error("Error: this.peerPublicCryptoKey is undefined");
-                return {};
-              }
-              // Get body
-              const body: Uint8Array = await utils.getBodyBytesFromResponse(res);
-              // Split body into IV and encrypted parcel
-              const iv = body.slice(0, this.aesGcmIvLength);
-              const encryptedParcel = body.slice(this.aesGcmIvLength);
-              console.log("body:", body);
-              // Get secret key
-              const secretKey = await this.getSecretKey(this.peerPublicCryptoKey);
-              // Decrypt body text
-              const decryptedParcel: ArrayBuffer = await crypto.subtle.decrypt(
-                { name: 'AES-GCM', iv, tagLength: 128 },
-                secretKey,
-                encryptedParcel
-              );
-              // Parse the text to JSON
-              return JSON.parse(
-                // TODO: any
-                // String.fromCharCode.apply(null, new Uint8Array(decryptedParcel) as any)
-                // (from: https://stackoverflow.com/a/41180394/2885946)
-                new TextDecoder().decode(decryptedParcel)
-              );
-            }
-          })();
+    // Get public JWK for encryption
+    const publicJwk: JsonWebKey = await crypto.subtle.exportKey(
+      'jwk',
+      (await this.keyPairPromise).publicKey
+    );
 
-          // Parse parcel
-          const parcel: Parcel | undefined = parseJsonToParcel(resJson);
+    const url = `${this.serverUrl}/${getPath(this.talkerId, this.peerId)}`;
 
-          if(parcel === undefined) {
-            console.error(`Parse error: ${await res.json()}`);
-            return;
-          }
-
-          switch (parcel.kind) {
-            case "ecdh_public_jwk":
-              // Set peer's public JWK
-              const peerPublicJwk: JsonWebKey = parcel.content.jwk;
-              console.log("Peer's public JWK:", peerPublicJwk);
-
-              // If signature connection is enable
-              if (this.enableSignature) {
-                const signature =  parcel.content.signature;
-                // If no signature
-                if (signature === undefined) {
-                  this.echoSystemTalk("Error: establishment failed because peer has no signature");
-                  break;
-                }
-
-                // Decode base64
-                const signatureBuff: ArrayBuffer = utils.stringToArrayBuffer(atob(signature));
-
-                // Get peer's public key
-                const peerPublicKey = await utils.pubRsaPemToPubKey(this.signAlg, this.peerPublicSignPem);
-
-                // Peer's JWK
-                const signData: ArrayBuffer = utils.stringToArrayBuffer(getSignDataFromJwk(peerPublicJwk));
-
-                const verified = await window.crypto.subtle.verify(
-                  this.signAlg,
-                  peerPublicKey,
-                  signatureBuff,
-                  signData
-                );
-
-                console.log('verified:', verified);
-
-                if (verified) {
-                  this.echoSystemTalk("Peer was verified!");
-                } else {
-                  this.echoSystemTalk("Error: Peer was not verified.");
-                  this.echoSystemTalk("Error: Connection was not established.");
-                  break;
-                }
-              }
-
-              // Assign peer's public JWK by import
-              this.peerPublicCryptoKey = await crypto.subtle.importKey(
-                'jwk',
-                peerPublicJwk,
-                {name: 'ECDH', namedCurve: 'P-256'},
-                true,
-                []
-              );
-
-              this.echoSystemTalk("Peer's public key received.");
-              this.hasPeerPublicKeyReceived = true;
-              this.echoEstablishMessageIfNeed();
-              break;
-            case "talk":
-              const userTalk: UserTalk = {
-                kind: "user",
-                time: new Date(),
-                talkerId: this.peerId,
-                content: parcel.content,
-                arrived: true
-              };
-
-              console.log("userTalk:", userTalk);
-
-              // NOTE: I'm not sure this usage is correct to update asynchronously,
-              //       but without this, it sometimes weren't updated.
-              this.$nextTick(()=>{
-                // Push peer's message
-                this.talks.unshift(userTalk);
-              });
-              break;
-          }
-        } catch (err) {
-          console.error('Error:', err);
-        }
+    // Signature of public encryption JWK
+    const signature: string | undefined = await (async ()=>{
+      if (this.enableSignature) {
+        // Get private key by PEM
+        const { privateKey } = await utils.privRsaPemToPubPrivKeys(this.signAlg, this.privateSignPem);
+        // Sign
+        const signatureBuff: ArrayBuffer = await window.crypto.subtle.sign(
+          this.signAlg,
+          privateKey,
+          utils.stringToArrayBuffer(getSignDataFromJwk(publicJwk))
+        );
+        // Base64 encode
+        return btoa(utils.arrayBufferToString(signatureBuff));
+      } else {
+        return undefined;
       }
     })();
+
+    const parcel: EcdhPublicJwkParcel = {
+      kind: "ecdh_public_jwk",
+      content: {
+        jwk: publicJwk,
+        signature: signature
+      },
+    };
+    console.log('parcel:', JSON.stringify(parcel));
+    const res = await this.sendSeqCtx.run(()=>
+      fetch(url, {
+        method: "POST",
+        headers: {
+          // TODO: This should be "application/json".
+          //       however, POST application/json triggers preflight request
+          //       and Piping Server doesn't support preflight request.
+          "content-type": "text/plain"
+        },
+        body: JSON.stringify(parcel)
+      })
+    );
+
+    this.echoSystemTalk("Your public key sent.");
+    this.hasPublicKeySent = true;
+    this.echoEstablishMessageIfNeed();
+    console.log("res:", res);
+  }
+
+  async receiveParcelLoop() {
+    const url = `${this.serverUrl}/${getPath(this.peerId, this.talkerId)}`;
+    while(true) {
+      try {
+        console.log(`Getting ${url}...`);
+        const res = await this.recieveSeqCtx.run(()=>
+          fetch(url, {
+            method: "GET"
+          })
+        );
+
+        if(res.body === null) {
+          console.log("ERROR: Body not found");
+          return;
+        }
+
+        // Response JSON
+        const resJson: any = await (async ()=>{
+          // If content type is JSON
+          // TODO: This should be "application/json".
+          //       however, POST application/json triggers preflight request
+          //       and Piping Server doesn't support preflight request.
+          if(res.headers.get("content-type") === "text/plain") {
+            return res.json();
+          } else {
+            if( this.peerPublicCryptoKey === undefined ) {
+              console.error("Error: this.peerPublicCryptoKey is undefined");
+              return {};
+            }
+            // Get body
+            const body: Uint8Array = await utils.getBodyBytesFromResponse(res);
+            // Split body into IV and encrypted parcel
+            const iv = body.slice(0, this.aesGcmIvLength);
+            const encryptedParcel = body.slice(this.aesGcmIvLength);
+            console.log("body:", body);
+            // Get secret key
+            const secretKey = await this.getSecretKey(this.peerPublicCryptoKey);
+            // Decrypt body text
+            const decryptedParcel: ArrayBuffer = await crypto.subtle.decrypt(
+              { name: 'AES-GCM', iv, tagLength: 128 },
+              secretKey,
+              encryptedParcel
+            );
+            // Parse the text to JSON
+            return JSON.parse(
+              // TODO: any
+              // String.fromCharCode.apply(null, new Uint8Array(decryptedParcel) as any)
+              // (from: https://stackoverflow.com/a/41180394/2885946)
+              new TextDecoder().decode(decryptedParcel)
+            );
+          }
+        })();
+
+        // Parse parcel
+        const parcel: Parcel | undefined = parseJsonToParcel(resJson);
+
+        if(parcel === undefined) {
+          console.error(`Parse error: ${await res.json()}`);
+          return;
+        }
+
+        switch (parcel.kind) {
+          case "ecdh_public_jwk":
+            // Set peer's public JWK
+            const peerPublicJwk: JsonWebKey = parcel.content.jwk;
+            console.log("Peer's public JWK:", peerPublicJwk);
+
+            // If signature connection is enable
+            if (this.enableSignature) {
+              const signature =  parcel.content.signature;
+              // If no signature
+              if (signature === undefined) {
+                this.echoSystemTalk("Error: establishment failed because peer has no signature");
+                break;
+              }
+
+              // Decode base64
+              const signatureBuff: ArrayBuffer = utils.stringToArrayBuffer(atob(signature));
+
+              // Get peer's public key
+              const peerPublicKey = await utils.pubRsaPemToPubKey(this.signAlg, this.peerPublicSignPem);
+
+              // Peer's JWK
+              const signData: ArrayBuffer = utils.stringToArrayBuffer(getSignDataFromJwk(peerPublicJwk));
+
+              const verified = await window.crypto.subtle.verify(
+                this.signAlg,
+                peerPublicKey,
+                signatureBuff,
+                signData
+              );
+
+              console.log('verified:', verified);
+
+              if (verified) {
+                this.echoSystemTalk("Peer was verified!");
+              } else {
+                this.echoSystemTalk("Error: Peer was not verified.");
+                this.echoSystemTalk("Error: Connection was not established.");
+                break;
+              }
+            }
+
+            // Assign peer's public JWK by import
+            this.peerPublicCryptoKey = await crypto.subtle.importKey(
+              'jwk',
+              peerPublicJwk,
+              {name: 'ECDH', namedCurve: 'P-256'},
+              true,
+              []
+            );
+
+            this.echoSystemTalk("Peer's public key received.");
+            this.hasPeerPublicKeyReceived = true;
+            this.echoEstablishMessageIfNeed();
+            break;
+          case "talk":
+            const userTalk: UserTalk = {
+              kind: "user",
+              time: new Date(),
+              talkerId: this.peerId,
+              content: parcel.content,
+              arrived: true
+            };
+
+            console.log("userTalk:", userTalk);
+
+            // NOTE: I'm not sure this usage is correct to update asynchronously,
+            //       but without this, it sometimes weren't updated.
+            this.$nextTick(()=>{
+              // Push peer's message
+              this.talks.unshift(userTalk);
+            });
+            break;
+        }
+      } catch (err) {
+        console.error('Error:', err);
+      }
+    }
   }
 
   sendTalk(): void {
