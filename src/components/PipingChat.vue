@@ -9,9 +9,15 @@
       <details>
         <summary>Advanced</summary>
         <h3>For signature</h3>
+        <h4>Your public RSA PEM</h4>
+        <textarea v-model="publicSignPem" cols="80" rows="10" disabled></textarea><br>
         <details>
           <summary>Your private RSA PEM</summary>
-          <textarea v-model="privateSignPem" cols="80" rows="10"></textarea>
+          <textarea v-model="privateSignPem" cols="80" rows="10"></textarea><br>
+          Key bits: <input type="number" v-model="nKeyBits">
+          <button v-on:click="assignPrivatePem()">Generate private keys only for signature</button><br>
+          <button v-on:click="savePrivateKey()">Save private key</button>
+          <button v-on:click="erasePrivateKey()">Erase private key from storage</button>
         </details>
         <h4>Peer's public RSA PEM</h4>
         <textarea cols="80" rows="8" v-model="peerPublicSignPem"></textarea>
@@ -24,10 +30,6 @@
             <summary>Your private JWK</summary>
             <textarea cols="80" rows="8" v-model="privateJwkString" disabled></textarea>
           </details>
-          <!--        Key bits: <input type="number" v-model="nKeyBits">-->
-          <!--        <button v-on:click="assignPrivateKey()">Regenerate keys</button><br>-->
-          <!--        <button v-on:click="savePrivateKey()">Save private key</button>-->
-          <!--        <button v-on:click="erasePrivateKey()">Erase private key from storage</button>-->
           <h4>Peer's public JWK</h4>
           <textarea cols="80" rows="8" v-model="peerPublicJwkString" disabled></textarea>
         </details>
@@ -69,6 +71,7 @@ import * as cryptojs from 'crypto-js';
 import {PromiseSequentialContext} from "@/promise-sequential-context";
 import {AsyncComputed} from "@/AsyncComputed";
 import * as utils from '@/utils';
+import { jwk2pem } from 'pem-jwk';
 
 
 type EcdhPublicJwkParcel = {
@@ -150,7 +153,7 @@ function getSignDataFromJwk(jwk: JsonWebKey): string {
 }
 
 const StorageKeys = {
-  PRIVATE_KEY: "PRIVATE_KEY_LOCAL_STORAGE_KEY"
+  PRIVATE_SIGNATURE_PEM: "LOCAL_STORAGE_KEY/PRIVATE_SIGNATURE_PEM"
 };
 
 @Component({
@@ -168,14 +171,7 @@ export default class PipingChat extends Vue {
 
   talk: string = "";
 
-  nKeyBits = 2048;
-
-  // My private key
-  // NOTE: public key can be computable by private key
-  privateKey: string = "";
-
-  // Peer's public key
-  peerPublicKey: string = "";
+  nKeyBits = 4096;
 
   // My key pair
   keyPairPromise: PromiseLike<CryptoKeyPair> = window.crypto.subtle.generateKey(
@@ -195,24 +191,7 @@ export default class PipingChat extends Vue {
   peerPublicSignPem = "";
 
   // Algorithm for signature
-  signAlg = { name: 'RSASSA-PKCS1-v1_5', hash: { name: "SHA-256" }};
-
-  // My public key
-  get publicKey(): string {
-    if (this.privateKey === "") {
-      return "";
-    } else {
-      try {
-        // Compute public key by the private key
-        const crypt = new jsencrypt.JSEncrypt();
-        crypt.setPrivateKey(this.privateKey);
-        return crypt.getPublicKey();
-      } catch (err) {
-        console.error(err);
-        return "INVALID PRIVATE KEY";
-      }
-    }
-  }
+  signAlg = { name: 'RSASSA-PKCS1-v1_5', hash: { name: "SHA-256" } };
 
   // Whether your public key sent or not
   private hasPublicKeySent: boolean = false;
@@ -221,6 +200,24 @@ export default class PipingChat extends Vue {
 
   private recieveSeqCtx = new PromiseSequentialContext();
   private sendSeqCtx    = new PromiseSequentialContext();
+
+  // My public key
+  get publicSignPem(): string {
+    if (this.privateSignPem === "") {
+      return "";
+    } else {
+      try {
+        // Compute public key by the private key
+        const crypt = new jsencrypt.JSEncrypt();
+        crypt.setPrivateKey(this.privateSignPem);
+        return crypt.getPublicKey();
+      } catch (err) {
+        console.error(err);
+        return "INVALID PRIVATE KEY";
+      }
+    }
+  }
+
 
   @AsyncComputed()
   async publicJwkString(): Promise<string>{
@@ -259,10 +256,7 @@ export default class PipingChat extends Vue {
   }
 
   // Assign a private key asynchronously
-  private async assignPrivateKey(): Promise<void> {
-    // TODO: do something
-    return;
-
+  private async assignPrivatePem(): Promise<void> {
     // Echo generating message
     this.echoSystemTalk(`${this.nKeyBits}-bit key generating...`);
 
@@ -274,47 +268,59 @@ export default class PipingChat extends Vue {
       this.echoSystemTalk(`${this.nKeyBits}-bit key generating... (${pastSec} sec passed)`);
     }, 4000);
 
-    // Generate key
-    const { privateKey } = await utils.RSA.generateKeys({
-      default_key_size: this.nKeyBits
-    });
-    // Clear the time
+    // Generate RSA private PEM
+    const rsaPrivateKey: CryptoKeyPair = await window.crypto.subtle.generateKey(
+      { ...this.signAlg, modulusLength: this.nKeyBits,  publicExponent: new Uint8Array([0x01, 0x00, 0x01]) },
+      true,
+      ['sign', 'verify']
+    );
+    // Clear the timer
     clearInterval(timerId);
-    // Update private key
-    this.privateKey = privateKey;
 
-    // Echo generated message
-    this.echoSystemTalk(`🔑 ${this.nKeyBits}-bit key generated!`);
+    // Export to JWK
+    const rsaPrivateJwk: JsonWebKey = await window.crypto.subtle.exportKey('jwk', rsaPrivateKey.privateKey);
+    if (rsaPrivateJwk.kty !== undefined && rsaPrivateJwk.n !== undefined && rsaPrivateJwk.e !== undefined) {
+      const jwk = {
+        ...rsaPrivateJwk,
+        kty: rsaPrivateJwk.kty,
+        n: rsaPrivateJwk.n,
+        e: rsaPrivateJwk.e,
+      };
+      // Assign private pem
+      this.privateSignPem = jwk2pem(jwk);
+      // Echo generated message
+      this.echoSystemTalk(`🔑 ${this.nKeyBits}-bit PEM generated!`);
+    } else {
+      // Echo generated message
+      this.echoSystemTalk(`Error: ${this.nKeyBits}-bit PEM not generated`);
+    }
   }
 
   mounted() {
-    const privateKey: string | null = localStorage.getItem(StorageKeys.PRIVATE_KEY);
-    // If private key is not found
-    if(privateKey === null) {
-      // Assign a private key asynchronously
-      this.assignPrivateKey();
-    } else {
-      this.privateKey = privateKey;
-      this.echoSystemTalk("🔑 Your private key loaded!");
+    const privatePem: string | null = localStorage.getItem(StorageKeys.PRIVATE_SIGNATURE_PEM);
+    // If private key is found
+    if(privatePem !== null) {
+      this.privateSignPem = privatePem;
+      this.echoSystemTalk("🔑 Your private PEM loaded!");
     }
   }
 
   private savePrivateKey(): void {
     // If private is not invalid
-    if(this.privateKey !== "") {
+    if(this.privateSignPem !== "") {
       // Save private key in local storage
-      localStorage.setItem(StorageKeys.PRIVATE_KEY, this.privateKey);
-      this.echoSystemTalk("Your private key saved.");
+      localStorage.setItem(StorageKeys.PRIVATE_SIGNATURE_PEM, this.privateSignPem);
+      this.echoSystemTalk("Your private PEM saved.");
     }
   }
 
   private erasePrivateKey(): void {
     // If private key in storage not found
-    if(localStorage.getItem(StorageKeys.PRIVATE_KEY) === null) {
-      this.echoSystemTalk("Private key is not saved yet.");
+    if(localStorage.getItem(StorageKeys.PRIVATE_SIGNATURE_PEM) === null) {
+      this.echoSystemTalk("Private PEM is not saved yet.");
     } else {
-      localStorage.removeItem(StorageKeys.PRIVATE_KEY);
-      this.echoSystemTalk("Your private key erased from local storage.");
+      localStorage.removeItem(StorageKeys.PRIVATE_SIGNATURE_PEM);
+      this.echoSystemTalk("Your private PEM erased from local storage.");
     }
   }
 
