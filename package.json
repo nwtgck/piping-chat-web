@@ -29,7 +29,7 @@
     "@types/whatwg-fetch": "0.0.33",
     "@vue/cli-plugin-babel": "^3.6.0",
     "@vue/cli-plugin-typescript": "^3.6.0",
-    "@vue/cli-service": "^3.5.0",
+    "@vue/cli-service": "^3.6.0",
     "typescript": "^3.4.3",
     "vue-template-compiler": "^2.5.21"
   },
