@@ -38,7 +38,7 @@
     <hr>
     <p>
       <input type="text" v-model="talk" placeholder="Your talk">
-      <button v-on:click="sendTalk()">Send</button>
+      <button v-on:click="sendTalk()" v-bind:disabled="!isEstablished">Send</button>
     </p>
     <!-- History of talks-->
     <div>
@@ -241,7 +241,7 @@ export default class PipingChat extends Vue {
   }
 
   get isEstablished(): boolean {
-    return this.hasPublicKeySent && this.hasPeerPublicKeyReceived;
+    return this.hasPublicKeySent && this.hasPeerPublicKeyReceived && (!this.enableSignature || this.peerVerified);
   }
   // TODO: Hard code
   public serverUrl: string = 'https://ppng.ml';
@@ -263,6 +263,8 @@ export default class PipingChat extends Vue {
 
   // Session ID
   public sessionId?: string;
+  // Whether peer is verified by public key authentication
+  public peerVerified: boolean = false;
 
   // Key pair for encryption
   public encryptKeyPairPromise: PromiseLike<CryptoKeyPair> = window.crypto.subtle.generateKey(
@@ -523,7 +525,7 @@ export default class PipingChat extends Vue {
               });
             }
 
-            // this.echoEstablishMessageIfNeed();
+            this.echoEstablishMessageIfNeed();
             break;
           case 'session_id_signature':
             if (this.sessionId === undefined) {
@@ -540,21 +542,22 @@ export default class PipingChat extends Vue {
             // Get peer's public key
             const peerPublicKey = await utils.pubRsaPemToPubKey(this.signAlg, this.peerPublicSignPem);
             // Verify
-            const verified: boolean = await window.crypto.subtle.verify(
+            this.peerVerified = await window.crypto.subtle.verify(
               this.signAlg,
               peerPublicKey,
               signatureBuff,
               utils.stringToArrayBuffer(this.sessionId),
             );
-            console.log('verified:', verified);
+            console.log('verified:', this.peerVerified);
 
-            if (verified) {
+            if (this.peerVerified) {
               this.echoSystemTalk('Peer was verified!');
             } else {
               this.echoSystemTalk('Error: Peer was not verified.');
               this.echoSystemTalk('Error: Connection was not established.');
               break;
             }
+            this.echoEstablishMessageIfNeed();
             break;
           case 'talk':
             const userTalk: UserTalk = {
