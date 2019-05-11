@@ -20,7 +20,8 @@
           <button v-on:click="erasePrivateKey()">Erase private key from storage</button>
         </details>
         <h4>Peer's public RSA PEM</h4>
-        <textarea cols="80" rows="8" v-model="peerPublicSignPem"></textarea>
+        <textarea cols="80" rows="8" v-model="peerPublicSignPem"></textarea><br>
+        Session ID: <input type="text" v-bind:value="sessionId" disabled size="70">
 
         <details>
           <summary>For encryption</summary>
@@ -38,7 +39,7 @@
     <hr>
     <p>
       <input type="text" v-model="talk" placeholder="Your talk">
-      <button v-on:click="sendTalk()">Send</button>
+      <button v-on:click="sendTalk()" v-bind:disabled="!isEstablished">Send</button>
     </p>
     <!-- History of talks-->
     <div>
@@ -75,12 +76,19 @@ import * as utils from '@/utils';
 import { jwk2pem } from 'pem-jwk';
 
 
-interface EcdhPublicJwkParcel {
-  kind: 'ecdh_public_jwk';
+interface KeyExchangeParcel {
+  kind: 'key_exchange';
   content: {
-    jwk: JsonWebKey,
-    signature?: string,
+    // Public key for session ID generation
+    sessionIdPublicJwk: JsonWebKey,
+    // Public key for encryption
+    encryptPublicJwk: JsonWebKey,
   };
+}
+
+interface SessionIdSignatureParcel {
+  kind: 'session_id_signature';
+  content: string;
 }
 
 interface TalkParcel {
@@ -88,7 +96,7 @@ interface TalkParcel {
   content: string;
 }
 
-type Parcel = EcdhPublicJwkParcel | TalkParcel;
+type Parcel = KeyExchangeParcel | SessionIdSignatureParcel | TalkParcel;
 
 interface UserTalk {
   kind: 'user';
@@ -135,8 +143,10 @@ function parseJsonToParcel(json: any): Parcel | undefined {
     return undefined;
   }
   switch (json.kind) {
-    case 'ecdh_public_jwk':
+    case 'key_exchange':
+    case 'session_id_signature':
     case 'talk':
+      // TODO: Not safe because content can be anything. Validate moore
       return {
         kind: json.kind,
         content: json.content,
@@ -146,14 +156,42 @@ function parseJsonToParcel(json: any): Parcel | undefined {
   }
 }
 
-
 // (NOTE: The reason not to use JSON.stringify() is that I'm not sure the order of items is always same.)
 // TODO: Remove it and Use JWK thumbprint instead
-function getSignDataFromJwk(jwk: JsonWebKey): string {
+function getPoorJwkFingerprint(jwk: JsonWebKey): string {
   // JSON string sorted by keys
   // (from: https://stackoverflow.com/a/16168003/2885946)
   return JSON.stringify(jwk, Object.keys(jwk));
 }
+
+// Generate session ID
+async function generateSessionId(sessionIdPublicJwk: JsonWebKey, sessionIdPrivateKey: CryptoKey): Promise<string> {
+  // Convert JWK To CryptoKey
+  const sessionIdPublicKey: CryptoKey = await crypto.subtle.importKey(
+    'jwk',
+    sessionIdPublicJwk,
+    {name: 'ECDH', namedCurve: 'P-256'},
+    true,
+    [],
+  );
+  // Create secret key for session ID generation
+  const sessionIdKey: CryptoKey = await crypto.subtle.deriveKey(
+    { name: 'ECDH', public: sessionIdPublicKey },
+    sessionIdPrivateKey,
+    {name: 'AES-GCM', length: 128},
+    true,
+    ['encrypt', 'decrypt'],
+  );
+  // Convert the secret key to JWK
+  const sessionIdJwk: JsonWebKey = await window.crypto.subtle.exportKey(
+    'jwk',
+    sessionIdKey,
+  );
+  const sessionIdPoorFingerprint = getPoorJwkFingerprint(sessionIdJwk);
+  // Return session ID
+  return cryptojs.SHA256(sessionIdPoorFingerprint).toString();
+}
+
 
 /**
  * Get JSON string from Crypto key
@@ -193,7 +231,7 @@ export default class PipingChat extends Vue {
   }
 
   get isEstablished(): boolean {
-    return this.hasPublicKeySent && this.hasPeerPublicKeyReceived;
+    return this.hasPublicKeySent && this.hasPeerPublicKeyReceived && (!this.enableSignature || this.peerVerified);
   }
   // TODO: Hard code
   public serverUrl: string = 'https://ppng.ml';
@@ -205,6 +243,18 @@ export default class PipingChat extends Vue {
   public talk: string = '';
 
   public nKeyBits = 4096;
+
+  // Key pair to create session ID
+  public sessionIdKeyPairPromise: PromiseLike<CryptoKeyPair> = window.crypto.subtle.generateKey(
+    { name: 'ECDH', namedCurve: 'P-256'},
+    true,
+    ['deriveKey', 'deriveBits'],
+  );
+
+  // Session ID
+  public sessionId: string = '';
+  // Whether peer is verified by public key authentication
+  public peerVerified: boolean = false;
 
   // Key pair for encryption
   public encryptKeyPairPromise: PromiseLike<CryptoKeyPair> = window.crypto.subtle.generateKey(
@@ -220,7 +270,7 @@ export default class PipingChat extends Vue {
   public readonly aesGcmIvLength: number = 12;
 
   // Whether using signature to verify peer
-  public enableSignature = true; // TODO: false
+  public enableSignature = false;
   // Private PEM only for signature
   public privateSignPem = '';
   // Peer's public PEM for signature
@@ -295,37 +345,25 @@ export default class PipingChat extends Vue {
   public async sendPublicKey() {
     this.echoSystemTalk(`Sending your public key to "${this.peerId}"...`);
 
+    // Get public JWK for session ID generation
+    const sessionIdPublicJwk: JsonWebKey = await crypto.subtle.exportKey(
+      'jwk',
+      (await this.sessionIdKeyPairPromise).publicKey,
+    );
+
     // Get public JWK for encryption
-    const publicJwk: JsonWebKey = await crypto.subtle.exportKey(
+    const encryptPublicJwk: JsonWebKey = await crypto.subtle.exportKey(
       'jwk',
       (await this.encryptKeyPairPromise).publicKey,
     );
 
     const url = `${this.serverUrl}/${getPath(this.talkerId, this.peerId)}`;
 
-    // Signature of public encryption JWK
-    const signature: string | undefined = await (async () => {
-      if (this.enableSignature) {
-        // Get private key by PEM
-        const { privateKey } = await utils.privRsaPemToPubPrivKeys(this.signAlg, this.privateSignPem);
-        // Sign
-        const signatureBuff: ArrayBuffer = await window.crypto.subtle.sign(
-          this.signAlg,
-          privateKey,
-          utils.stringToArrayBuffer(getSignDataFromJwk(publicJwk)),
-        );
-        // Base64 encode
-        return btoa(utils.arrayBufferToString(signatureBuff));
-      } else {
-        return undefined;
-      }
-    })();
-
-    const parcel: EcdhPublicJwkParcel = {
-      kind: 'ecdh_public_jwk',
+    const parcel: KeyExchangeParcel = {
+      kind: 'key_exchange',
       content: {
-        jwk: publicJwk,
-        signature,
+        sessionIdPublicJwk,
+        encryptPublicJwk,
       },
     };
     console.log('parcel:', JSON.stringify(parcel));
@@ -410,46 +448,17 @@ export default class PipingChat extends Vue {
         }
 
         switch (parcel.kind) {
-          case 'ecdh_public_jwk':
+          case 'key_exchange':
             // Set peer's public JWK
-            const peerPublicJwk: JsonWebKey = parcel.content.jwk;
+            const peerPublicJwk: JsonWebKey = parcel.content.encryptPublicJwk;
             console.log('Peer\'s public JWK:', peerPublicJwk);
 
-            // If signature connection is enable
-            if (this.enableSignature) {
-              const signature =  parcel.content.signature;
-              // If no signature
-              if (signature === undefined) {
-                this.echoSystemTalk('Error: establishment failed because peer has no signature');
-                break;
-              }
-
-              // Decode base64
-              const signatureBuff: ArrayBuffer = utils.stringToArrayBuffer(atob(signature));
-
-              // Get peer's public key
-              const peerPublicKey = await utils.pubRsaPemToPubKey(this.signAlg, this.peerPublicSignPem);
-
-              // Peer's JWK
-              const signData: ArrayBuffer = utils.stringToArrayBuffer(getSignDataFromJwk(peerPublicJwk));
-
-              const verified = await window.crypto.subtle.verify(
-                this.signAlg,
-                peerPublicKey,
-                signatureBuff,
-                signData,
-              );
-
-              console.log('verified:', verified);
-
-              if (verified) {
-                this.echoSystemTalk('Peer was verified!');
-              } else {
-                this.echoSystemTalk('Error: Peer was not verified.');
-                this.echoSystemTalk('Error: Connection was not established.');
-                break;
-              }
-            }
+            // Assign session ID
+            this.sessionId = await generateSessionId(
+              parcel.content.sessionIdPublicJwk,
+              (await this.sessionIdKeyPairPromise).privateKey,
+            );
+            console.log('Session ID:', this.sessionId);
 
             // Assign peer's public JWK by import
             this.peerEncryptPublicCryptoKey = await crypto.subtle.importKey(
@@ -462,6 +471,82 @@ export default class PipingChat extends Vue {
 
             this.echoSystemTalk('Peer\'s public key received.');
             this.hasPeerPublicKeyReceived = true;
+
+            // If signature is enabled
+            if (this.enableSignature) {
+              // Get private key by PEM
+              const { privateKey } = await utils.privRsaPemToPubPrivKeys(this.signAlg, this.privateSignPem);
+              // Sign session ID
+              // NOTE: Peer has the same session ID
+              // tslint:disable-next-line:no-shadowed-variable
+              const signatureBuff: ArrayBuffer = await window.crypto.subtle.sign(
+                this.signAlg,
+                privateKey,
+                utils.stringToArrayBuffer(this.sessionId),
+              );
+              // Get signature by using base64 encode
+              // tslint:disable-next-line:no-shadowed-variable
+              const signature = btoa(utils.arrayBufferToString(signatureBuff));
+              console.log('send signature:', signature);
+
+              // tslint:disable-next-line:no-shadowed-variable
+              const parcel: SessionIdSignatureParcel = {
+                kind: 'session_id_signature',
+                content: signature,
+              };
+              // Encrypt parcel
+              const body = await this.encryptParcel(parcel, this.peerEncryptPublicCryptoKey);
+              // NOTE: Should not use await not to prevent receive loop
+              this.sendSeqCtx.run(async () => {
+                // tslint:disable-next-line:no-shadowed-variable
+                const url = `${this.serverUrl}/${getPath(this.talkerId, this.peerId)}`;
+                // Send signature
+                // tslint:disable-next-line:no-shadowed-variable
+                const res = await fetch(url, {
+                  method: 'POST',
+                  body,
+                });
+                if (res.body === null) {
+                  this.echoSystemTalk('Unexpected error: send-body is null.');
+                } else {
+                  // Wait for body being complete
+                  await res.body.pipeTo(new WritableStream({}));
+                }
+              });
+            }
+
+            this.echoEstablishMessageIfNeed();
+            break;
+          case 'session_id_signature':
+            if (this.sessionId === undefined) {
+              console.error('Unexpected Error: session is not defined');
+              break;
+            }
+            // Get based64 encoded signature
+            // tslint:disable-next-line:no-shadowed-variable
+            const signature: string = parcel.content;
+            console.log('receive signature:', signature);
+            // Decode base64
+            // tslint:disable-next-line:no-shadowed-variable
+            const signatureBuff: ArrayBuffer = utils.stringToArrayBuffer(atob(signature));
+            // Get peer's public key
+            const peerPublicKey = await utils.pubRsaPemToPubKey(this.signAlg, this.peerPublicSignPem);
+            // Verify
+            this.peerVerified = await window.crypto.subtle.verify(
+              this.signAlg,
+              peerPublicKey,
+              signatureBuff,
+              utils.stringToArrayBuffer(this.sessionId),
+            );
+            console.log('verified:', this.peerVerified);
+
+            if (this.peerVerified) {
+              this.echoSystemTalk('Peer was verified!');
+            } else {
+              this.echoSystemTalk('Error: Peer was not verified.');
+              this.echoSystemTalk('Error: Connection was not established.');
+              break;
+            }
             this.echoEstablishMessageIfNeed();
             break;
           case 'talk':
@@ -511,21 +596,12 @@ export default class PipingChat extends Vue {
           kind: 'talk',
           content: myTalk,
         };
-        // Create an initialization vector
-        const iv = crypto.getRandomValues(new Uint8Array(this.aesGcmIvLength));
-        // Get secret key
-        const secretKey = await this.getSecretKey(this.peerEncryptPublicCryptoKey);
         // Encrypt parcel
-        const encryptedParcel: ArrayBuffer = await crypto.subtle.encrypt(
-          { name: 'AES-GCM', iv, tagLength: 128 },
-          secretKey,
-          // (from: https://stackoverflow.com/a/41180394/2885946)
-          new TextEncoder().encode(JSON.stringify(parcel)),
-        );
+        const body = await this.encryptParcel(parcel, this.peerEncryptPublicCryptoKey);
         await this.sendSeqCtx.run(async () => {
           const res = await fetch(url, {
             method: 'POST',
-            body: utils.mergeUint8Array(iv, new Uint8Array(encryptedParcel)),
+            body,
           });
           if (res.body === null) {
             this.echoSystemTalk('Unexpected error: send-body is null.');
@@ -538,6 +614,27 @@ export default class PipingChat extends Vue {
         });
       }
     })();
+  }
+
+  /**
+   * Encrypt parcel attached IV on head
+   * @param parcel
+   * @param peerEncryptPublicCryptoKey
+   */
+  private async encryptParcel(parcel: Parcel, peerEncryptPublicCryptoKey: CryptoKey): Promise<Uint8Array> {
+    // Create an initialization vector
+    const iv = crypto.getRandomValues(new Uint8Array(this.aesGcmIvLength));
+    // Get secret key
+    const secretKey = await this.getSecretKey(peerEncryptPublicCryptoKey);
+    // Encrypt parcel
+    const encryptedParcel = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv, tagLength: 128 },
+      secretKey,
+      // (from: https://stackoverflow.com/a/41180394/2885946)
+      new TextEncoder().encode(JSON.stringify(parcel)),
+    );
+    // Join IV and encrypted parcel
+    return utils.mergeUint8Array(iv, new Uint8Array(encryptedParcel));
   }
 
   private echoSystemTalk(message: string): void {
