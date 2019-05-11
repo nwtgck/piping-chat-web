@@ -75,10 +75,8 @@ import * as utils from '@/utils';
 import { jwk2pem } from 'pem-jwk';
 
 
-// TODO: Should rename
-interface EcdhPublicJwkParcel {
-  // TODO: Should rename kind
-  kind: 'ecdh_public_jwk';
+interface KeyExchangeParcel {
+  kind: 'key_exchange';
   content: {
     // Public key for session ID generation
     sessionIdPublicJwk: JsonWebKey,
@@ -92,7 +90,7 @@ interface TalkParcel {
   content: string;
 }
 
-type Parcel = EcdhPublicJwkParcel | TalkParcel;
+type Parcel = KeyExchangeParcel | TalkParcel;
 
 interface UserTalk {
   kind: 'user';
@@ -139,7 +137,7 @@ function parseJsonToParcel(json: any): Parcel | undefined {
     return undefined;
   }
   switch (json.kind) {
-    case 'ecdh_public_jwk':
+    case 'key_exchange':
     case 'talk':
       return {
         kind: json.kind,
@@ -380,8 +378,8 @@ export default class PipingChat extends Vue {
     //   }
     // })();
 
-    const parcel: EcdhPublicJwkParcel = {
-      kind: 'ecdh_public_jwk',
+    const parcel: KeyExchangeParcel = {
+      kind: 'key_exchange',
       content: {
         sessionIdPublicJwk,
         encryptPublicJwk,
@@ -469,7 +467,7 @@ export default class PipingChat extends Vue {
         }
 
         switch (parcel.kind) {
-          case 'ecdh_public_jwk':
+          case 'key_exchange':
             // Set peer's public JWK
             const peerPublicJwk: JsonWebKey = parcel.content.encryptPublicJwk;
             console.log('Peer\'s public JWK:', peerPublicJwk);
