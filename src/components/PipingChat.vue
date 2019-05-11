@@ -20,7 +20,8 @@
           <button v-on:click="erasePrivateKey()">Erase private key from storage</button>
         </details>
         <h4>Peer's public RSA PEM</h4>
-        <textarea cols="80" rows="8" v-model="peerPublicSignPem"></textarea>
+        <textarea cols="80" rows="8" v-model="peerPublicSignPem"></textarea><br>
+        Session ID: <input type="text" v-bind:value="sessionId" disabled size="70">
 
         <details>
           <summary>For encryption</summary>
@@ -251,7 +252,7 @@ export default class PipingChat extends Vue {
   );
 
   // Session ID
-  public sessionId?: string;
+  public sessionId: string = '';
   // Whether peer is verified by public key authentication
   public peerVerified: boolean = false;
 
