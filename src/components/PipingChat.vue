@@ -155,17 +155,6 @@ function parseJsonToParcel(json: any): Parcel | undefined {
   }
 }
 
-
-// TODO: Remove
-// (NOTE: The reason not to use JSON.stringify() is that I'm not sure the order of items is always same.)
-// TODO: Remove it and Use JWK thumbprint instead
-function getSignDataFromJwk(jwk: JsonWebKey): string {
-  // JSON string sorted by keys
-  // (from: https://stackoverflow.com/a/16168003/2885946)
-  return JSON.stringify(jwk, Object.keys(jwk));
-}
-
-
 // (NOTE: The reason not to use JSON.stringify() is that I'm not sure the order of items is always same.)
 // TODO: Remove it and Use JWK thumbprint instead
 function getPoorJwkFingerprint(jwk: JsonWebKey): string {
@@ -280,7 +269,7 @@ export default class PipingChat extends Vue {
   public readonly aesGcmIvLength: number = 12;
 
   // Whether using signature to verify peer
-  public enableSignature = true; // TODO: false
+  public enableSignature = false;
   // Private PEM only for signature
   public privateSignPem = '';
   // Peer's public PEM for signature
