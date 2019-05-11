@@ -367,24 +367,6 @@ export default class PipingChat extends Vue {
 
     const url = `${this.serverUrl}/${getPath(this.talkerId, this.peerId)}`;
 
-    // // Signature of public encryption JWK
-    // const signature: string | undefined = await (async () => {
-    //   if (this.enableSignature) {
-    //     // Get private key by PEM
-    //     const { privateKey } = await utils.privRsaPemToPubPrivKeys(this.signAlg, this.privateSignPem);
-    //     // Sign
-    //     const signatureBuff: ArrayBuffer = await window.crypto.subtle.sign(
-    //       this.signAlg,
-    //       privateKey,
-    //       utils.stringToArrayBuffer(getSignDataFromJwk(publicJwk)),
-    //     );
-    //     // Base64 encode
-    //     return btoa(utils.arrayBufferToString(signatureBuff));
-    //   } else {
-    //     return undefined;
-    //   }
-    // })();
-
     const parcel: KeyExchangeParcel = {
       kind: 'key_exchange',
       content: {
@@ -485,42 +467,6 @@ export default class PipingChat extends Vue {
               (await this.sessionIdKeyPairPromise).privateKey,
             );
             console.log('Session ID:', this.sessionId);
-
-            // // If signature connection is enable
-            // if (this.enableSignature) {
-            //   const signature =  parcel.content.signature;
-            //   // If no signature
-            //   if (signature === undefined) {
-            //     this.echoSystemTalk('Error: establishment failed because peer has no signature');
-            //     break;
-            //   }
-            //
-            //   // Decode base64
-            //   const signatureBuff: ArrayBuffer = utils.stringToArrayBuffer(atob(signature));
-            //
-            //   // Get peer's public key
-            //   const peerPublicKey = await utils.pubRsaPemToPubKey(this.signAlg, this.peerPublicSignPem);
-            //
-            //   // Peer's JWK
-            //   const signData: ArrayBuffer = utils.stringToArrayBuffer(getSignDataFromJwk(peerPublicJwk));
-            //
-            //   const verified = await window.crypto.subtle.verify(
-            //     this.signAlg,
-            //     peerPublicKey,
-            //     signatureBuff,
-            //     signData,
-            //   );
-            //
-            //   console.log('verified:', verified);
-            //
-            //   if (verified) {
-            //     this.echoSystemTalk('Peer was verified!');
-            //   } else {
-            //     this.echoSystemTalk('Error: Peer was not verified.');
-            //     this.echoSystemTalk('Error: Connection was not established.');
-            //     break;
-            //   }
-            // }
 
             // Assign peer's public JWK by import
             this.peerEncryptPublicCryptoKey = await crypto.subtle.importKey(
