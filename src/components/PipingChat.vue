@@ -75,11 +75,15 @@ import * as utils from '@/utils';
 import { jwk2pem } from 'pem-jwk';
 
 
+// TODO: Should rename
 interface EcdhPublicJwkParcel {
+  // TODO: Should rename kind
   kind: 'ecdh_public_jwk';
   content: {
-    jwk: JsonWebKey,
-    signature?: string,
+    // Public key for session ID generation
+    sessionIdPublicJwk: JsonWebKey,
+    // Public key for encryption
+    encryptPublicJwk: JsonWebKey,
   };
 }
 
@@ -147,6 +151,7 @@ function parseJsonToParcel(json: any): Parcel | undefined {
 }
 
 
+// TODO: Remove
 // (NOTE: The reason not to use JSON.stringify() is that I'm not sure the order of items is always same.)
 // TODO: Remove it and Use JWK thumbprint instead
 function getSignDataFromJwk(jwk: JsonWebKey): string {
@@ -154,6 +159,44 @@ function getSignDataFromJwk(jwk: JsonWebKey): string {
   // (from: https://stackoverflow.com/a/16168003/2885946)
   return JSON.stringify(jwk, Object.keys(jwk));
 }
+
+
+// (NOTE: The reason not to use JSON.stringify() is that I'm not sure the order of items is always same.)
+// TODO: Remove it and Use JWK thumbprint instead
+function getPoorJwkFingerprint(jwk: JsonWebKey): string {
+  // JSON string sorted by keys
+  // (from: https://stackoverflow.com/a/16168003/2885946)
+  return JSON.stringify(jwk, Object.keys(jwk));
+}
+
+// Generate session ID
+async function generateSessionId(sessionIdPublicJwk: JsonWebKey, sessionIdPrivateKey: CryptoKey): Promise<string> {
+  // Convert JWK To CryptoKey
+  const sessionIdPublicKey: CryptoKey = await crypto.subtle.importKey(
+    'jwk',
+    sessionIdPublicJwk,
+    {name: 'ECDH', namedCurve: 'P-256'},
+    true,
+    [],
+  );
+  // Create secret key for session ID generation
+  const sessionIdKey: CryptoKey = await crypto.subtle.deriveKey(
+    { name: 'ECDH', public: sessionIdPublicKey },
+    sessionIdPrivateKey,
+    {name: 'AES-GCM', length: 128},
+    true,
+    ['encrypt', 'decrypt'],
+  );
+  // Convert the secret key to JWK
+  const sessionIdJwk: JsonWebKey = await window.crypto.subtle.exportKey(
+    'jwk',
+    sessionIdKey,
+  );
+  const sessionIdPoorFingerprint = getPoorJwkFingerprint(sessionIdJwk);
+  // Return session ID
+  return cryptojs.SHA256(sessionIdPoorFingerprint).toString();
+}
+
 
 /**
  * Get JSON string from Crypto key
@@ -205,6 +248,16 @@ export default class PipingChat extends Vue {
   public talk: string = '';
 
   public nKeyBits = 4096;
+
+  // Key pair to create session ID
+  public sessionIdKeyPairPromise: PromiseLike<CryptoKeyPair> = window.crypto.subtle.generateKey(
+    { name: 'ECDH', namedCurve: 'P-256'},
+    true,
+    ['deriveKey', 'deriveBits'],
+  );
+
+  // Session ID
+  public sessionId?: string;
 
   // Key pair for encryption
   public encryptKeyPairPromise: PromiseLike<CryptoKeyPair> = window.crypto.subtle.generateKey(
@@ -295,37 +348,43 @@ export default class PipingChat extends Vue {
   public async sendPublicKey() {
     this.echoSystemTalk(`Sending your public key to "${this.peerId}"...`);
 
+    // Get public JWK for session ID generation
+    const sessionIdPublicJwk: JsonWebKey = await crypto.subtle.exportKey(
+      'jwk',
+      (await this.sessionIdKeyPairPromise).publicKey,
+    );
+
     // Get public JWK for encryption
-    const publicJwk: JsonWebKey = await crypto.subtle.exportKey(
+    const encryptPublicJwk: JsonWebKey = await crypto.subtle.exportKey(
       'jwk',
       (await this.encryptKeyPairPromise).publicKey,
     );
 
     const url = `${this.serverUrl}/${getPath(this.talkerId, this.peerId)}`;
 
-    // Signature of public encryption JWK
-    const signature: string | undefined = await (async () => {
-      if (this.enableSignature) {
-        // Get private key by PEM
-        const { privateKey } = await utils.privRsaPemToPubPrivKeys(this.signAlg, this.privateSignPem);
-        // Sign
-        const signatureBuff: ArrayBuffer = await window.crypto.subtle.sign(
-          this.signAlg,
-          privateKey,
-          utils.stringToArrayBuffer(getSignDataFromJwk(publicJwk)),
-        );
-        // Base64 encode
-        return btoa(utils.arrayBufferToString(signatureBuff));
-      } else {
-        return undefined;
-      }
-    })();
+    // // Signature of public encryption JWK
+    // const signature: string | undefined = await (async () => {
+    //   if (this.enableSignature) {
+    //     // Get private key by PEM
+    //     const { privateKey } = await utils.privRsaPemToPubPrivKeys(this.signAlg, this.privateSignPem);
+    //     // Sign
+    //     const signatureBuff: ArrayBuffer = await window.crypto.subtle.sign(
+    //       this.signAlg,
+    //       privateKey,
+    //       utils.stringToArrayBuffer(getSignDataFromJwk(publicJwk)),
+    //     );
+    //     // Base64 encode
+    //     return btoa(utils.arrayBufferToString(signatureBuff));
+    //   } else {
+    //     return undefined;
+    //   }
+    // })();
 
     const parcel: EcdhPublicJwkParcel = {
       kind: 'ecdh_public_jwk',
       content: {
-        jwk: publicJwk,
-        signature,
+        sessionIdPublicJwk,
+        encryptPublicJwk,
       },
     };
     console.log('parcel:', JSON.stringify(parcel));
@@ -412,44 +471,51 @@ export default class PipingChat extends Vue {
         switch (parcel.kind) {
           case 'ecdh_public_jwk':
             // Set peer's public JWK
-            const peerPublicJwk: JsonWebKey = parcel.content.jwk;
+            const peerPublicJwk: JsonWebKey = parcel.content.encryptPublicJwk;
             console.log('Peer\'s public JWK:', peerPublicJwk);
 
-            // If signature connection is enable
-            if (this.enableSignature) {
-              const signature =  parcel.content.signature;
-              // If no signature
-              if (signature === undefined) {
-                this.echoSystemTalk('Error: establishment failed because peer has no signature');
-                break;
-              }
+            // Assign session ID
+            this.sessionId = await generateSessionId(
+              parcel.content.sessionIdPublicJwk,
+              (await this.sessionIdKeyPairPromise).privateKey,
+            );
+            console.log('Session ID:', this.sessionId);
 
-              // Decode base64
-              const signatureBuff: ArrayBuffer = utils.stringToArrayBuffer(atob(signature));
-
-              // Get peer's public key
-              const peerPublicKey = await utils.pubRsaPemToPubKey(this.signAlg, this.peerPublicSignPem);
-
-              // Peer's JWK
-              const signData: ArrayBuffer = utils.stringToArrayBuffer(getSignDataFromJwk(peerPublicJwk));
-
-              const verified = await window.crypto.subtle.verify(
-                this.signAlg,
-                peerPublicKey,
-                signatureBuff,
-                signData,
-              );
-
-              console.log('verified:', verified);
-
-              if (verified) {
-                this.echoSystemTalk('Peer was verified!');
-              } else {
-                this.echoSystemTalk('Error: Peer was not verified.');
-                this.echoSystemTalk('Error: Connection was not established.');
-                break;
-              }
-            }
+            // // If signature connection is enable
+            // if (this.enableSignature) {
+            //   const signature =  parcel.content.signature;
+            //   // If no signature
+            //   if (signature === undefined) {
+            //     this.echoSystemTalk('Error: establishment failed because peer has no signature');
+            //     break;
+            //   }
+            //
+            //   // Decode base64
+            //   const signatureBuff: ArrayBuffer = utils.stringToArrayBuffer(atob(signature));
+            //
+            //   // Get peer's public key
+            //   const peerPublicKey = await utils.pubRsaPemToPubKey(this.signAlg, this.peerPublicSignPem);
+            //
+            //   // Peer's JWK
+            //   const signData: ArrayBuffer = utils.stringToArrayBuffer(getSignDataFromJwk(peerPublicJwk));
+            //
+            //   const verified = await window.crypto.subtle.verify(
+            //     this.signAlg,
+            //     peerPublicKey,
+            //     signatureBuff,
+            //     signData,
+            //   );
+            //
+            //   console.log('verified:', verified);
+            //
+            //   if (verified) {
+            //     this.echoSystemTalk('Peer was verified!');
+            //   } else {
+            //     this.echoSystemTalk('Error: Peer was not verified.');
+            //     this.echoSystemTalk('Error: Connection was not established.');
+            //     break;
+            //   }
+            // }
 
             // Assign peer's public JWK by import
             this.peerEncryptPublicCryptoKey = await crypto.subtle.importKey(
