@@ -155,6 +155,15 @@ function getSignDataFromJwk(jwk: JsonWebKey): string {
   return JSON.stringify(jwk, Object.keys(jwk));
 }
 
+/**
+ * Get JSON string from Crypto key
+ * @param key
+ */
+async function getJwkString(key: CryptoKey): Promise<string> {
+  const jwk = await window.crypto.subtle.exportKey('jwk', key);
+  return JSON.stringify(jwk, null, '  ');
+}
+
 const StorageKeys = {
   PRIVATE_SIGNATURE_PEM: 'LOCAL_STORAGE_KEY/PRIVATE_SIGNATURE_PEM',
 };
@@ -228,14 +237,12 @@ export default class PipingChat extends Vue {
 
   @AsyncComputed()
   public async publicJwkString(): Promise<string> {
-    const jwk = await window.crypto.subtle.exportKey('jwk', (await this.keyPairPromise).publicKey);
-    return JSON.stringify(jwk, null, '  ');
+    return getJwkString((await this.keyPairPromise).publicKey);
   }
 
   @AsyncComputed()
   public async privateJwkString(): Promise<string> {
-    const jwk = await window.crypto.subtle.exportKey('jwk', (await this.keyPairPromise).privateKey);
-    return JSON.stringify(jwk, null, '  ');
+    return getJwkString((await this.keyPairPromise).privateKey);
   }
 
   @AsyncComputed()
@@ -247,8 +254,7 @@ export default class PipingChat extends Vue {
         if (self.peerPublicCryptoKey === undefined) {
           setTimeout(loop, 1000);
         } else {
-          const jwk = await window.crypto.subtle.exportKey('jwk', self.peerPublicCryptoKey);
-          resolve(JSON.stringify(jwk, null, '  '));
+          resolve(getJwkString(self.peerPublicCryptoKey));
         }
       })();
     });
