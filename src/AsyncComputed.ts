@@ -6,15 +6,16 @@ import { IAsyncComputedProperty } from 'vue-async-computed';
 export function AsyncComputed<T>(
     computedOptions?: IAsyncComputedProperty<T>,
 ): VueDecorator {
+    /* tslint:disable:variable-name */
     return createDecorator((_options, key) => {
         // TODO: Not use any casting
         const options: any = _options as any;
         options.asyncComputed = options.asyncComputed || {};
         const method = options.methods![key];
-        options.asyncComputed![key] = <IAsyncComputedProperty<T>>{
+        options.asyncComputed![key] = {
             get: method,
             ...computedOptions,
-        };
+        } as IAsyncComputedProperty<T>;
         delete options.methods![key];
     });
 }

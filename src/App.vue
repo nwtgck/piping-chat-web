@@ -17,14 +17,14 @@ Vue.use(ForkeMeOnGithub);
 @Component({
   components: {
     PipingChat,
-    ForkeMeOnGithub
+    ForkeMeOnGithub,
   },
 })
 export default class App extends Vue {
-  ribbonOptions = {
+  public ribbonOptions = {
     text: 'Open on GitHub',
-    linkUrl: "https://github.com/nwtgck/piping-chat-web",
-    fixed: true
+    linkUrl: 'https://github.com/nwtgck/piping-chat-web',
+    fixed: true,
   };
 }
 </script>
