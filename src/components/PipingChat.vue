@@ -25,13 +25,13 @@
         <details>
           <summary>For encryption</summary>
           <h4>Your public JWK</h4>
-          <textarea cols="80" rows="8" v-model="publicJwkString" disabled></textarea>
+          <textarea cols="80" rows="8" v-model="publicEncryptJwkString" disabled></textarea>
           <details>
             <summary>Your private JWK</summary>
-            <textarea cols="80" rows="8" v-model="privateJwkString" disabled></textarea>
+            <textarea cols="80" rows="8" v-model="privateEncryptJwkString" disabled></textarea>
           </details>
           <h4>Peer's public JWK</h4>
-          <textarea cols="80" rows="8" v-model="peerPublicJwkString" disabled></textarea>
+          <textarea cols="80" rows="8" v-model="peerPublicEncryptJwkString" disabled></textarea>
         </details>
       </details>
     </p>
@@ -206,21 +206,24 @@ export default class PipingChat extends Vue {
 
   public nKeyBits = 4096;
 
-  // My key pair
-  public keyPairPromise: PromiseLike<CryptoKeyPair> = window.crypto.subtle.generateKey(
+  // Key pair for encryption
+  public encryptKeyPairPromise: PromiseLike<CryptoKeyPair> = window.crypto.subtle.generateKey(
     { name: 'ECDH', namedCurve: 'P-256'},
     true,
     ['deriveKey', 'deriveBits'],
   );
 
-  // Peer's public key
-  public peerPublicCryptoKey?: CryptoKey;
+  // Peer's public key for encryption
+  public peerEncryptPublicCryptoKey?: CryptoKey;
 
   // Initialization vector size
   public readonly aesGcmIvLength: number = 12;
 
-  public enableSignature = false;
+  // Whether using signature to verify peer
+  public enableSignature = true; // TODO: false
+  // Private PEM only for signature
   public privateSignPem = '';
+  // Peer's public PEM for signature
   public peerPublicSignPem = '';
 
   // Algorithm for signature
@@ -231,30 +234,35 @@ export default class PipingChat extends Vue {
   // Whether peer's public key received or not
   private hasPeerPublicKeyReceived: boolean = false;
 
+  // Context to receive talks sequentially
   private recieveSeqCtx = new PromiseSequentialContext();
+  // Context to send talks sequentially
   private sendSeqCtx    = new PromiseSequentialContext();
 
 
+  // Public JWK string for encryption
   @AsyncComputed()
-  public async publicJwkString(): Promise<string> {
-    return getJwkString((await this.keyPairPromise).publicKey);
+  public async publicEncryptJwkString(): Promise<string> {
+    return getJwkString((await this.encryptKeyPairPromise).publicKey);
   }
 
+  // Private JWK string for encryption
   @AsyncComputed()
-  public async privateJwkString(): Promise<string> {
-    return getJwkString((await this.keyPairPromise).privateKey);
+  public async privateEncryptJwkString(): Promise<string> {
+    return getJwkString((await this.encryptKeyPairPromise).privateKey);
   }
 
+  // Peer's public JWK string for encryption
   @AsyncComputed()
-  public async peerPublicJwkString(): Promise<string> {
+  public async peerPublicEncryptJwkString(): Promise<string> {
     const self = this;
     return new Promise((resolve) => {
       // Watch peerPublicCryptoKey
       (async function loop() {
-        if (self.peerPublicCryptoKey === undefined) {
+        if (self.peerEncryptPublicCryptoKey === undefined) {
           setTimeout(loop, 1000);
         } else {
-          resolve(getJwkString(self.peerPublicCryptoKey));
+          resolve(getJwkString(self.peerEncryptPublicCryptoKey));
         }
       })();
     });
@@ -290,7 +298,7 @@ export default class PipingChat extends Vue {
     // Get public JWK for encryption
     const publicJwk: JsonWebKey = await crypto.subtle.exportKey(
       'jwk',
-      (await this.keyPairPromise).publicKey,
+      (await this.encryptKeyPairPromise).publicKey,
     );
 
     const url = `${this.serverUrl}/${getPath(this.talkerId, this.peerId)}`;
@@ -365,7 +373,7 @@ export default class PipingChat extends Vue {
           if (res.headers.get('content-type') === 'text/plain') {
             return res.json();
           } else {
-            if ( this.peerPublicCryptoKey === undefined ) {
+            if ( this.peerEncryptPublicCryptoKey === undefined ) {
               console.error('Error: this.peerPublicCryptoKey is undefined');
               return {};
             }
@@ -376,7 +384,7 @@ export default class PipingChat extends Vue {
             const encryptedParcel = body.slice(this.aesGcmIvLength);
             console.log('body:', body);
             // Get secret key
-            const secretKey = await this.getSecretKey(this.peerPublicCryptoKey);
+            const secretKey = await this.getSecretKey(this.peerEncryptPublicCryptoKey);
             // Decrypt body text
             const decryptedParcel: ArrayBuffer = await crypto.subtle.decrypt(
               { name: 'AES-GCM', iv, tagLength: 128 },
@@ -444,7 +452,7 @@ export default class PipingChat extends Vue {
             }
 
             // Assign peer's public JWK by import
-            this.peerPublicCryptoKey = await crypto.subtle.importKey(
+            this.peerEncryptPublicCryptoKey = await crypto.subtle.importKey(
               'jwk',
               peerPublicJwk,
               {name: 'ECDH', namedCurve: 'P-256'},
@@ -496,7 +504,7 @@ export default class PipingChat extends Vue {
 
     (async () => {
       const url = `${this.serverUrl}/${getPath(this.talkerId, this.peerId)}`;
-      if (this.peerPublicCryptoKey === undefined) {
+      if (this.peerEncryptPublicCryptoKey === undefined) {
         this.echoSystemTalk('Peer\'s public key is not received yet.');
       } else {
         const parcel: Parcel = {
@@ -506,7 +514,7 @@ export default class PipingChat extends Vue {
         // Create an initialization vector
         const iv = crypto.getRandomValues(new Uint8Array(this.aesGcmIvLength));
         // Get secret key
-        const secretKey = await this.getSecretKey(this.peerPublicCryptoKey);
+        const secretKey = await this.getSecretKey(this.peerEncryptPublicCryptoKey);
         // Encrypt parcel
         const encryptedParcel: ArrayBuffer = await crypto.subtle.encrypt(
           { name: 'AES-GCM', iv, tagLength: 128 },
@@ -603,7 +611,7 @@ export default class PipingChat extends Vue {
   private async getSecretKey(peerPublicCryptoKey: CryptoKey): Promise<CryptoKey> {
     return crypto.subtle.deriveKey(
       { name: 'ECDH', public: peerPublicCryptoKey },
-      (await this.keyPairPromise).privateKey,
+      (await this.encryptKeyPairPromise).privateKey,
       {name: 'AES-GCM', length: 128},
       false,
       ['encrypt', 'decrypt'],
