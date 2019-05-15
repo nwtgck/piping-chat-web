@@ -13,6 +13,7 @@
     "jsencrypt": "^3.0.0-rc.1",
     "pem-jwk": "^2.0.0",
     "register-service-worker": "^1.6.2",
+    "ts-json-validator": "git+https://github.com/nwtgck/ts-json-validator.git#v0.1.2",
     "vue": "^2.6.6",
     "vue-async-computed": "^3.6.1",
     "vue-class-component": "^7.1.0",

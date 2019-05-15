@@ -74,29 +74,64 @@ import {PromiseSequentialContext} from '@/promise-sequential-context';
 import {AsyncComputed} from '@/AsyncComputed';
 import * as utils from '@/utils';
 import { jwk2pem } from 'pem-jwk';
+import {nul, bool, num, str, literal, opt, arr, tuple, obj, union, TsType, validatingParse} from 'ts-json-validator';
 
 
-interface KeyExchangeParcel {
-  kind: 'key_exchange';
-  content: {
+const rsaOtherPrimesInfoFormat = obj({
+  d: opt(str),
+  r: opt(str),
+  t: opt(str),
+});
+
+const jsonWebKeyFormat = obj({
+  alg: opt(str),
+  crv: opt(str),
+  d: opt(str),
+  dp: opt(str),
+  dq: opt(str),
+  e: opt(str),
+  ext: opt(bool),
+  k: opt(str),
+  key_ops: opt(arr(str)),
+  kty: opt(str),
+  n: opt(str),
+  oth: opt(arr(rsaOtherPrimesInfoFormat)),
+  p: opt(str),
+  q: opt(str),
+  qi: opt(str),
+  use: opt(str),
+  x: opt(str),
+  y: opt(str),
+});
+
+const keyExchangeParcelFormat = obj({
+  kind: literal('key_exchange' as const),
+  content: obj({
     // Public key for session ID generation
-    sessionIdPublicJwk: JsonWebKey,
+    sessionIdPublicJwk: jsonWebKeyFormat,
     // Public key for encryption
-    encryptPublicJwk: JsonWebKey,
-  };
-}
+    encryptPublicJwk: jsonWebKeyFormat,
+  }),
+});
+type KeyExchangeParcel = TsType<typeof keyExchangeParcelFormat>;
 
-interface SessionIdSignatureParcel {
-  kind: 'session_id_signature';
-  content: string;
-}
 
-interface TalkParcel {
-  kind: 'talk';
-  content: string;
-}
+const sessionIdSignatureParcelFormat = obj({
+  kind: literal('session_id_signature' as const),
+  content: str,
+});
+type SessionIdSignatureParcel = TsType<typeof sessionIdSignatureParcelFormat>;
 
-type Parcel = KeyExchangeParcel | SessionIdSignatureParcel | TalkParcel;
+
+const talkParcelFormat = obj({
+  kind: literal('talk' as const),
+  content: str,
+});
+type TalkParcel = TsType<typeof talkParcelFormat>;
+
+
+const parcelFormat = union(keyExchangeParcelFormat, sessionIdSignatureParcelFormat, talkParcelFormat);
+type Parcel = TsType<typeof parcelFormat>;
 
 interface UserTalk {
   kind: 'user';
@@ -132,28 +167,6 @@ function getRandomId(len: number): string {
 
 function getPath(toId: string, fromId: string): string {
   return cryptojs.SHA256(`${toId}-to-${fromId}`).toString();
-}
-
-/**
- * Parse JSON to Parcel
- * @param json
- */
-function parseJsonToParcel(json: any): Parcel | undefined {
-  if (json.content === undefined) {
-    return undefined;
-  }
-  switch (json.kind) {
-    case 'key_exchange':
-    case 'session_id_signature':
-    case 'talk':
-      // TODO: Not safe because content can be anything. Validate moore
-      return {
-        kind: json.kind,
-        content: json.content,
-      };
-    default:
-      return undefined;
-  }
 }
 
 // (NOTE: The reason not to use JSON.stringify() is that I'm not sure the order of items is always same.)
@@ -402,18 +415,21 @@ export default class PipingChat extends Vue {
           return;
         }
 
-        // Response JSON
-        const resJson: any = await (async () => {
+        // Get parcel
+        const parcel: Parcel | undefined = await (async () => {
           // If content type is JSON
           // TODO: This should be "application/json".
           //       however, POST application/json triggers preflight request
           //       and Piping Server doesn't support preflight request.
           if (res.headers.get('content-type') === 'text/plain') {
-            return res.json();
+            return validatingParse(
+              parcelFormat,
+              await res.text(),
+            );
           } else {
             if ( this.peerEncryptPublicCryptoKey === undefined ) {
               console.error('Error: this.peerPublicCryptoKey is undefined');
-              return {};
+              return undefined;
             }
             // Get body
             const body: Uint8Array = await utils.getBodyBytesFromResponse(res);
@@ -429,18 +445,14 @@ export default class PipingChat extends Vue {
               secretKey,
               encryptedParcel,
             );
-            // Parse the text to JSON
-            return JSON.parse(
-              // TODO: any
-              // String.fromCharCode.apply(null, new Uint8Array(decryptedParcel) as any)
+            // Parse and validate
+            return validatingParse(
+              parcelFormat,
               // (from: https://stackoverflow.com/a/41180394/2885946)
               new TextDecoder().decode(decryptedParcel),
             );
           }
         })();
-
-        // Parse parcel
-        const parcel: Parcel | undefined = parseJsonToParcel(resJson);
 
         if (parcel === undefined) {
           console.error(`Parse error: ${await res.json()}`);
