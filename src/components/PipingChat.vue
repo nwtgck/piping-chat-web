@@ -1,45 +1,112 @@
-<template>
+<template xmlns:v-slot="http://www.w3.org/1999/XSL/Transform">
   <div>
-    <p>
-      Server: <input type="text" v-model="serverUrl"><br>
-      Your ID: <input type="text" v-model="talkerId"><br>
-      Peer ID: <input type="text" v-model="peerId" placeholder="e.g. bma"><br>
-      <button v-on:click="connectToPeer()">Connect</button><br>
-      <input type="checkbox" v-model="enableSignature"> Enable connect with signature<br>
-      <details>
-        <summary>Advanced</summary>
-        <h3>For signature</h3>
-        <h4>Your public RSA PEM</h4>
-        <textarea v-model="publicSignPem" cols="80" rows="10" disabled></textarea><br>
-        <details>
-          <summary>Your private RSA PEM</summary>
-          <textarea v-model="privateSignPem" cols="80" rows="10"></textarea><br>
-          Key bits: <input type="number" v-model="nKeyBits">
-          <button v-on:click="assignPrivatePem()">Generate private keys only for signature</button><br>
-          <button v-on:click="savePrivateKey()">Save private key</button>
-          <button v-on:click="erasePrivateKey()">Erase private key from storage</button>
-        </details>
-        <h4>Peer's public RSA PEM</h4>
-        <textarea cols="80" rows="8" v-model="peerPublicSignPem"></textarea><br>
-        Session ID: <input type="text" v-bind:value="sessionId" disabled size="70">
+    <v-layout>
+      <v-flex xs12 offset-sm2 sm8 offset-md3 md6>
+        <v-card style="padding: 1em;">
+          <v-text-field label="Server URL"
+                        v-model="serverUrl" />
+          <v-text-field label="Your ID"
+                        v-model="talkerId" />
+          <v-text-field label="Peer ID"
+                        v-model="peerId"
+                        placeholder="e.g. bma" />
+          <v-switch label="Public key authentication"
+                    v-model="enableSignature" />
 
-        <details>
-          <summary>For encryption</summary>
-          <h4>Your public JWK</h4>
-          <textarea cols="80" rows="8" v-model="publicEncryptJwkString" disabled></textarea>
-          <details>
-            <summary>Your private JWK</summary>
-            <textarea cols="80" rows="8" v-model="privateEncryptJwkString" disabled></textarea>
-          </details>
-          <h4>Peer's public JWK</h4>
-          <textarea cols="80" rows="8" v-model="peerPublicEncryptJwkString" disabled></textarea>
-        </details>
-      </details>
-    </p>
+          <div v-if="enableSignature">
+            <v-textarea label="Your public RSA PEM"
+                        v-model="publicSignPem"
+                        readonly
+                        outline
+                        prepend-icon="person" />
+            <v-switch label="Show your private PEM"
+                      color="secondary"
+                      v-model="showsPrivateSignPem"/>
+            <v-textarea label="Your private RSA PEM"
+                        v-model="privateSignPem"
+                        v-if="showsPrivateSignPem"
+                        outline
+                        prepend-icon="lock" />
+
+            <v-text-field label="Key bits"
+                          type="number"
+                          v-model="nKeyBits" />
+            <!-- Generate PEM button -->
+            <v-btn color="secondary"
+                   v-on:click="assignPrivatePem()">
+              <v-icon>autorenew</v-icon>
+              Generate PEMs
+            </v-btn>
+            <!-- Save PEM button -->
+            <v-btn color="secondary"
+                   v-on:click="savePrivateKey()">
+              <v-icon>save</v-icon>
+              Save PEMs
+            </v-btn>
+            <!-- Erase PEM button -->
+            <v-btn color="secondary"
+                   v-on:click="erasePrivateKey()">
+              <v-icon>delete</v-icon>
+              Erase PEMs
+            </v-btn>
+
+            <v-textarea label="Peer's public RSA PEM"
+                        v-model="peerPublicSignPem"
+                        outline
+                        prepend-icon="person"
+                        style="padding-top: 3em;"/>
+          </div>
+
+          <v-btn color="success"
+                 v-on:click="connectToPeer()"
+                 block>
+            Connect
+          </v-btn>
+        </v-card>
+
+        <v-expansion-panel>
+          <v-expansion-panel-content>
+            <template v-slot:header>
+              <v-icon>person</v-icon>
+              <div>Connection details</div>
+            </template>
+            <v-card style="padding: 1em;">
+              <v-text-field label="Session ID"
+                            v-bind:value="sessionId"
+                            placeholder=" "
+                            readonly />
+              <v-textarea label="Your public JWK for encryption"
+                          v-model="publicEncryptJwkString"
+                          readonly
+                          prepend-icon="public"
+                          outline />
+              <v-switch label="Show private JWK for encryption"
+                        color="secondary"
+                        v-model="showsPrivateEncryptJwk"/>
+              <v-textarea label="Your private JWK for encryption"
+                          v-model="privateEncryptJwkString"
+                          v-if="showsPrivateEncryptJwk"
+                          readonly
+                          prepend-icon="vpn_key"
+                          outline />
+
+              <h4></h4>
+              <v-textarea label="Peer's public JWK for encryption"
+                          v-model="peerPublicEncryptJwkString"
+                          readonly
+                          prepend-icon="public"
+                          placeholder=" "
+                          outline />
+            </v-card>
+          </v-expansion-panel-content>
+        </v-expansion-panel>
+      </v-flex>
+    </v-layout>
     <hr>
     <p>
-      <input type="text" v-model="talk" placeholder="Your talk">
-      <button v-on:click="sendTalk()" v-bind:disabled="!isEstablished">Send</button>
+      <v-text-field v-model="talk"
+                    placeholder="Your talk" />
+      <v-btn v-on:click="sendTalk()" v-bind:disabled="!isEstablished">Send</v-btn>
     </p>
     <!-- History of talks-->
     <div>
@@ -288,6 +355,10 @@ export default class PipingChat extends Vue {
   public privateSignPem = '';
   // Peer's public PEM for signature
   public peerPublicSignPem = '';
+  // Whether showing private PEM for signature or not
+  public showsPrivateSignPem: boolean = false;
+  // Whether showing private JWK for encryption or not
+  public showsPrivateEncryptJwk: boolean = false;
 
   // Algorithm for signature
   public signAlg = { name: 'RSASSA-PKCS1-v1_5', hash: { name: 'SHA-256' } };
