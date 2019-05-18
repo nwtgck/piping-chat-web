@@ -118,6 +118,7 @@
               </v-flex>
               <v-flex offset-xs9 xs3 offset-lg11 lg1>
                 <v-btn v-on:click="sendTalk()"
+                       v-bind:disabled="talk === ''"
                        color="secondary"
                        block >
                   <v-icon>send</v-icon>
