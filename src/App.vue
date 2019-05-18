@@ -1,10 +1,12 @@
 <template>
-  <div id="app">
+  <v-app id="app">
     <Ribbon v-bind="ribbonOptions"></Ribbon>
-    <h1>Piping Chat</h1>
-    🛡 End-to-End Encryption Chat via <a href="https://github.com/nwtgck/piping-server">Piping Server</a>
+    <h1 style="text-align: center">Piping Chat</h1>
+    <p style="text-align: center">
+      🛡 End-to-End Encryption Chat via <a href="https://github.com/nwtgck/piping-server">Piping Server</a>
+    </p>
     <PipingChat />
-  </div>
+  </v-app>
 </template>
 
 <script lang="ts">
@@ -36,6 +38,6 @@ export default class App extends Vue {
   -moz-osx-font-smoothing: grayscale;
   /*text-align: center;*/
   color: #2c3e50;
-  margin-top: 20px;
+  padding-top: 20px;
 }
 </style>
