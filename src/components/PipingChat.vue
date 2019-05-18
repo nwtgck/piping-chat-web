@@ -1,65 +1,166 @@
-<template>
+<template xmlns:v-slot="http://www.w3.org/1999/XSL/Transform">
   <div>
-    <p>
-      Server: <input type="text" v-model="serverUrl"><br>
-      Your ID: <input type="text" v-model="talkerId"><br>
-      Peer ID: <input type="text" v-model="peerId" placeholder="e.g. bma"><br>
-      <button v-on:click="connectToPeer()">Connect</button><br>
-      <input type="checkbox" v-model="enableSignature"> Enable connect with signature<br>
-      <details>
-        <summary>Advanced</summary>
-        <h3>For signature</h3>
-        <h4>Your public RSA PEM</h4>
-        <textarea v-model="publicSignPem" cols="80" rows="10" disabled></textarea><br>
-        <details>
-          <summary>Your private RSA PEM</summary>
-          <textarea v-model="privateSignPem" cols="80" rows="10"></textarea><br>
-          Key bits: <input type="number" v-model="nKeyBits">
-          <button v-on:click="assignPrivatePem()">Generate private keys only for signature</button><br>
-          <button v-on:click="savePrivateKey()">Save private key</button>
-          <button v-on:click="erasePrivateKey()">Erase private key from storage</button>
-        </details>
-        <h4>Peer's public RSA PEM</h4>
-        <textarea cols="80" rows="8" v-model="peerPublicSignPem"></textarea><br>
-        Session ID: <input type="text" v-bind:value="sessionId" disabled size="70">
+    <v-layout>
+      <v-flex xs12 offset-sm2 sm8 offset-md3 md6>
+        <v-card style="padding: 1em;">
+          <v-text-field label="Server URL"
+                        v-model="serverUrl" />
+          <v-text-field label="Your ID"
+                        v-model="talkerId" />
+          <v-text-field label="Peer ID"
+                        v-model="peerId"
+                        placeholder="e.g. bma" />
+          <v-switch label="Public key authentication"
+                    v-model="enableSignature" />
 
-        <details>
-          <summary>For encryption</summary>
-          <h4>Your public JWK</h4>
-          <textarea cols="80" rows="8" v-model="publicEncryptJwkString" disabled></textarea>
-          <details>
-            <summary>Your private JWK</summary>
-            <textarea cols="80" rows="8" v-model="privateEncryptJwkString" disabled></textarea>
-          </details>
-          <h4>Peer's public JWK</h4>
-          <textarea cols="80" rows="8" v-model="peerPublicEncryptJwkString" disabled></textarea>
-        </details>
-      </details>
-    </p>
-    <hr>
-    <p>
-      <input type="text" v-model="talk" placeholder="Your talk">
-      <button v-on:click="sendTalk()" v-bind:disabled="!isEstablished">Send</button>
-    </p>
-    <!-- History of talks-->
-    <div>
-      <div v-for="talk in talks" :class='{"me": talk.talkerId === talkerId}'>
-        <span v-if="talk.kind === 'user'">
-          <div v-if="talk.talkerId !== talkerId">
-            <b>{{ talk.talkerId }}</b>
-            <time-ago :refresh="60" :datetime="talk.time" class="time"></time-ago><br>
+          <div v-if="enableSignature">
+            <v-textarea label="Your public RSA PEM"
+                        v-model="publicSignPem"
+                        readonly
+                        outline
+                        prepend-icon="person" />
+            <v-switch label="Show your private PEM"
+                      color="secondary"
+                      v-model="showsPrivateSignPem"/>
+            <v-textarea label="Your private RSA PEM"
+                        v-model="privateSignPem"
+                        v-if="showsPrivateSignPem"
+                        outline
+                        prepend-icon="lock" />
+
+            <v-text-field label="Key bits"
+                          type="number"
+                          v-model="nKeyBits" />
+            <!-- Generate PEM button -->
+            <v-btn color="secondary"
+                   v-on:click="assignPrivatePem()">
+              <v-icon>autorenew</v-icon>
+              Generate PEMs
+            </v-btn>
+            <!-- Save PEM button -->
+            <v-btn color="secondary"
+                   v-on:click="savePrivateKey()">
+              <v-icon>save</v-icon>
+              Save PEMs
+            </v-btn>
+            <!-- Erase PEM button -->
+            <v-btn color="secondary"
+                   v-on:click="erasePrivateKey()">
+              <v-icon>delete</v-icon>
+              Erase PEMs
+            </v-btn>
+
+            <v-textarea label="Peer's public RSA PEM"
+                        v-model="peerPublicSignPem"
+                        outline
+                        prepend-icon="person"
+                        style="padding-top: 3em;"/>
           </div>
-          <span v-if="talk.talkerId === talkerId">
-            {{ talk.arrived ? "✓" : "" }}
-            <time-ago :refresh="60" :datetime="talk.time" class="time"></time-ago>
+
+          <v-btn color="success"
+                 v-on:click="connectToPeer()"
+                 block>
+            Connect
+          </v-btn>
+        </v-card>
+
+        <v-expansion-panel>
+          <v-expansion-panel-content>
+            <template v-slot:header>
+              <v-icon>person</v-icon>
+              <div>Connection details</div>
+            </template>
+            <v-card style="padding: 1em;">
+              <v-text-field label="Session ID"
+                            v-bind:value="sessionId"
+                            placeholder=" "
+                            readonly />
+              <v-textarea label="Your public JWK for encryption"
+                          v-model="publicEncryptJwkString"
+                          readonly
+                          prepend-icon="public"
+                          outline />
+              <v-switch label="Show private JWK for encryption"
+                        color="secondary"
+                        v-model="showsPrivateEncryptJwk"/>
+              <v-textarea label="Your private JWK for encryption"
+                          v-model="privateEncryptJwkString"
+                          v-if="showsPrivateEncryptJwk"
+                          readonly
+                          prepend-icon="vpn_key"
+                          outline />
+
+              <h4></h4>
+              <v-textarea label="Peer's public JWK for encryption"
+                          v-model="peerPublicEncryptJwkString"
+                          readonly
+                          prepend-icon="public"
+                          placeholder=" "
+                          outline />
+            </v-card>
+          </v-expansion-panel-content>
+        </v-expansion-panel>
+      </v-flex>
+    </v-layout>
+
+    <div style="margin: 1em;">
+      <!-- Talk input -->
+      <v-layout v-if="isEstablished">
+        <v-flex offset-md1 md10 offset-lg2 lg8>
+          <v-container fluid>
+            <v-layout column>
+              <v-flex>
+                <!-- NOTE: hide-details is for deleting bottom space -->
+                <v-textarea label="Your talk"
+                            v-model="talk"
+                            outline
+                            hide-details />
+              </v-flex>
+              <v-flex offset-xs9 xs3 offset-lg11 lg1>
+                <v-btn v-on:click="sendTalk()"
+                       v-bind:disabled="talk === ''"
+                       color="secondary"
+                       block >
+                  <v-icon>send</v-icon>
+                  Send
+                </v-btn>
+              </v-flex>
+
+            </v-layout>
+          </v-container>
+
+          <!-- History of talks-->
+          <div v-for="talk in talks">
+            <!-- User talk -->
+            <span v-if="talk.kind === 'user'">
+              <span v-if="talk.talkerId !== talkerId">
+                {{ talk.talkerId }}
+              </span>
+              <div :class='{
+                "me": talk.talkerId === talkerId,
+                "peer": talk.talkerId !== talkerId,
+                "talk": true
+              }'>
+                {{talk.content }}<br>
+                <span style="color: #444">
+                  <span v-if="talk.talkerId === talkerId">
+                    {{ talk.arrived ? "✓" : "" }}
+                  </span>
+                  <time-ago :refresh="60"
+                            :datetime="talk.time"
+                            class="time" />
+                </span>
+              </div>
+            </span>
+
+            <!-- System talk -->
+            <span v-if="talk.kind === 'system'" style="font-size: 1.5em;">
+            <b>System</b> <time-ago :refresh="60" :datetime="talk.time" class="time"></time-ago>:
+            {{ talk.content }}
           </span>
-        「{{ talk.content }}」
-        </span>
-        <span v-if="talk.kind === 'system'">
-          <b>System</b> <time-ago :refresh="60" :datetime="talk.time" class="time"></time-ago>:
-          {{ talk.content }}
-        </span>
-      </div>
+          </div>
+        </v-flex>
+      </v-layout>
     </div>
   </div>
 </template>
@@ -74,29 +175,64 @@ import {PromiseSequentialContext} from '@/promise-sequential-context';
 import {AsyncComputed} from '@/AsyncComputed';
 import * as utils from '@/utils';
 import { jwk2pem } from 'pem-jwk';
+import {nul, bool, num, str, literal, opt, arr, tuple, obj, union, TsType, validatingParse} from 'ts-json-validator';
 
 
-interface KeyExchangeParcel {
-  kind: 'key_exchange';
-  content: {
+const rsaOtherPrimesInfoFormat = obj({
+  d: opt(str),
+  r: opt(str),
+  t: opt(str),
+});
+
+const jsonWebKeyFormat = obj({
+  alg: opt(str),
+  crv: opt(str),
+  d: opt(str),
+  dp: opt(str),
+  dq: opt(str),
+  e: opt(str),
+  ext: opt(bool),
+  k: opt(str),
+  key_ops: opt(arr(str)),
+  kty: opt(str),
+  n: opt(str),
+  oth: opt(arr(rsaOtherPrimesInfoFormat)),
+  p: opt(str),
+  q: opt(str),
+  qi: opt(str),
+  use: opt(str),
+  x: opt(str),
+  y: opt(str),
+});
+
+const keyExchangeParcelFormat = obj({
+  kind: literal('key_exchange' as const),
+  content: obj({
     // Public key for session ID generation
-    sessionIdPublicJwk: JsonWebKey,
+    sessionIdPublicJwk: jsonWebKeyFormat,
     // Public key for encryption
-    encryptPublicJwk: JsonWebKey,
-  };
-}
+    encryptPublicJwk: jsonWebKeyFormat,
+  }),
+});
+type KeyExchangeParcel = TsType<typeof keyExchangeParcelFormat>;
 
-interface SessionIdSignatureParcel {
-  kind: 'session_id_signature';
-  content: string;
-}
 
-interface TalkParcel {
-  kind: 'talk';
-  content: string;
-}
+const sessionIdSignatureParcelFormat = obj({
+  kind: literal('session_id_signature' as const),
+  content: str,
+});
+type SessionIdSignatureParcel = TsType<typeof sessionIdSignatureParcelFormat>;
 
-type Parcel = KeyExchangeParcel | SessionIdSignatureParcel | TalkParcel;
+
+const talkParcelFormat = obj({
+  kind: literal('talk' as const),
+  content: str,
+});
+type TalkParcel = TsType<typeof talkParcelFormat>;
+
+
+const parcelFormat = union(keyExchangeParcelFormat, sessionIdSignatureParcelFormat, talkParcelFormat);
+type Parcel = TsType<typeof parcelFormat>;
 
 interface UserTalk {
   kind: 'user';
@@ -132,28 +268,6 @@ function getRandomId(len: number): string {
 
 function getPath(toId: string, fromId: string): string {
   return cryptojs.SHA256(`${toId}-to-${fromId}`).toString();
-}
-
-/**
- * Parse JSON to Parcel
- * @param json
- */
-function parseJsonToParcel(json: any): Parcel | undefined {
-  if (json.content === undefined) {
-    return undefined;
-  }
-  switch (json.kind) {
-    case 'key_exchange':
-    case 'session_id_signature':
-    case 'talk':
-      // TODO: Not safe because content can be anything. Validate moore
-      return {
-        kind: json.kind,
-        content: json.content,
-      };
-    default:
-      return undefined;
-  }
 }
 
 // (NOTE: The reason not to use JSON.stringify() is that I'm not sure the order of items is always same.)
@@ -275,6 +389,10 @@ export default class PipingChat extends Vue {
   public privateSignPem = '';
   // Peer's public PEM for signature
   public peerPublicSignPem = '';
+  // Whether showing private PEM for signature or not
+  public showsPrivateSignPem: boolean = false;
+  // Whether showing private JWK for encryption or not
+  public showsPrivateEncryptJwk: boolean = false;
 
   // Algorithm for signature
   public signAlg = { name: 'RSASSA-PKCS1-v1_5', hash: { name: 'SHA-256' } };
@@ -402,18 +520,21 @@ export default class PipingChat extends Vue {
           return;
         }
 
-        // Response JSON
-        const resJson: any = await (async () => {
+        // Get parcel
+        const parcel: Parcel | undefined = await (async () => {
           // If content type is JSON
           // TODO: This should be "application/json".
           //       however, POST application/json triggers preflight request
           //       and Piping Server doesn't support preflight request.
           if (res.headers.get('content-type') === 'text/plain') {
-            return res.json();
+            return validatingParse(
+              parcelFormat,
+              await res.text(),
+            );
           } else {
             if ( this.peerEncryptPublicCryptoKey === undefined ) {
               console.error('Error: this.peerPublicCryptoKey is undefined');
-              return {};
+              return undefined;
             }
             // Get body
             const body: Uint8Array = await utils.getBodyBytesFromResponse(res);
@@ -429,18 +550,14 @@ export default class PipingChat extends Vue {
               secretKey,
               encryptedParcel,
             );
-            // Parse the text to JSON
-            return JSON.parse(
-              // TODO: any
-              // String.fromCharCode.apply(null, new Uint8Array(decryptedParcel) as any)
+            // Parse and validate
+            return validatingParse(
+              parcelFormat,
               // (from: https://stackoverflow.com/a/41180394/2885946)
               new TextDecoder().decode(decryptedParcel),
             );
           }
         })();
-
-        // Parse parcel
-        const parcel: Parcel | undefined = parseJsonToParcel(resJson);
 
         if (parcel === undefined) {
           console.error(`Parse error: ${await res.json()}`);
@@ -720,11 +837,27 @@ export default class PipingChat extends Vue {
 
 <!-- Add "scoped" attribute to limit CSS to this component only -->
 <style scoped>
-.me{
-  text-align: right;
-}
 .time{
   font-size: 0.6em;
-  color: #aaa;
+  color: #333;
+}
+
+.talk {
+  width: 70%;
+  font-size: 1.5em;
+  padding: 0.5em;
+  border-radius: 0.5em;
+  margin-bottom: 1em;
+}
+
+.peer {
+  background: #ccc;
+}
+
+.me {
+  background: #4F91FD;
+  /* (from: http://webfeelfree.com/css-align/) */
+  margin-left: auto;
+  color: white;
 }
 </style>
