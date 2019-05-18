@@ -102,15 +102,40 @@
         </v-expansion-panel>
       </v-flex>
     </v-layout>
-    <hr>
-    <p>
-      <v-text-field v-model="talk"
-                    placeholder="Your talk" />
-      <v-btn v-on:click="sendTalk()" v-bind:disabled="!isEstablished">Send</v-btn>
-    </p>
-    <!-- History of talks-->
-    <div>
-      <div v-for="talk in talks" :class='{"me": talk.talkerId === talkerId}'>
+
+    <div style="margin: 1em;">
+      <!-- Talk input -->
+      <v-layout>
+        <v-flex offset-md1 md10 offset-lg2 lg8>
+          <v-container fluid>
+            <v-layout column>
+              <v-flex>
+                <!-- NOTE: hide-details is for deleting bottom space -->
+                <v-textarea label="Your talk"
+                            v-model="talk"
+                            v-bind:disabled="!isEstablished"
+                            outline
+                            hide-details />
+              </v-flex>
+              <v-flex offset-xs9 xs3 offset-lg11 lg1>
+                <v-btn v-on:click="sendTalk()"
+                       v-bind:disabled="!isEstablished"
+                       color="secondary"
+                       block >
+                  <v-icon>send</v-icon>
+                  Send
+                </v-btn>
+              </v-flex>
+
+            </v-layout>
+          </v-container>
+        </v-flex>
+      </v-layout>
+
+
+      <!-- History of talks-->
+      <div>
+        <div v-for="talk in talks" :class='{"me": talk.talkerId === talkerId}'>
         <span v-if="talk.kind === 'user'">
           <div v-if="talk.talkerId !== talkerId">
             <b>{{ talk.talkerId }}</b>
@@ -122,10 +147,11 @@
           </span>
         「{{ talk.content }}」
         </span>
-        <span v-if="talk.kind === 'system'">
+          <span v-if="talk.kind === 'system'">
           <b>System</b> <time-ago :refresh="60" :datetime="talk.time" class="time"></time-ago>:
           {{ talk.content }}
         </span>
+        </div>
       </div>
     </div>
   </div>
