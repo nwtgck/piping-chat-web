@@ -105,7 +105,7 @@
 
     <div style="margin: 1em;">
       <!-- Talk input -->
-      <v-layout>
+      <v-layout v-if="isEstablished">
         <v-flex offset-md1 md10 offset-lg2 lg8>
           <v-container fluid>
             <v-layout column>
@@ -113,13 +113,11 @@
                 <!-- NOTE: hide-details is for deleting bottom space -->
                 <v-textarea label="Your talk"
                             v-model="talk"
-                            v-bind:disabled="!isEstablished"
                             outline
                             hide-details />
               </v-flex>
               <v-flex offset-xs9 xs3 offset-lg11 lg1>
                 <v-btn v-on:click="sendTalk()"
-                       v-bind:disabled="!isEstablished"
                        color="secondary"
                        block >
                   <v-icon>send</v-icon>
@@ -129,30 +127,39 @@
 
             </v-layout>
           </v-container>
+
+          <!-- History of talks-->
+          <div v-for="talk in talks">
+            <!-- User talk -->
+            <span v-if="talk.kind === 'user'">
+              <span v-if="talk.talkerId !== talkerId">
+                {{ talk.talkerId }}
+              </span>
+              <div :class='{
+                "me": talk.talkerId === talkerId,
+                "peer": talk.talkerId !== talkerId,
+                "talk": true
+              }'>
+                {{talk.content }}<br>
+                <span style="color: #444">
+                  <span v-if="talk.talkerId === talkerId">
+                    {{ talk.arrived ? "✓" : "" }}
+                  </span>
+                  <time-ago :refresh="60"
+                            :datetime="talk.time"
+                            class="time" />
+                </span>
+              </div>
+            </span>
+
+            <!-- System talk -->
+            <span v-if="talk.kind === 'system'" style="font-size: 1.5em;">
+            <b>System</b> <time-ago :refresh="60" :datetime="talk.time" class="time"></time-ago>:
+            {{ talk.content }}
+          </span>
+          </div>
         </v-flex>
       </v-layout>
-
-
-      <!-- History of talks-->
-      <div>
-        <div v-for="talk in talks" :class='{"me": talk.talkerId === talkerId}'>
-        <span v-if="talk.kind === 'user'">
-          <div v-if="talk.talkerId !== talkerId">
-            <b>{{ talk.talkerId }}</b>
-            <time-ago :refresh="60" :datetime="talk.time" class="time"></time-ago><br>
-          </div>
-          <span v-if="talk.talkerId === talkerId">
-            {{ talk.arrived ? "✓" : "" }}
-            <time-ago :refresh="60" :datetime="talk.time" class="time"></time-ago>
-          </span>
-        「{{ talk.content }}」
-        </span>
-          <span v-if="talk.kind === 'system'">
-          <b>System</b> <time-ago :refresh="60" :datetime="talk.time" class="time"></time-ago>:
-          {{ talk.content }}
-        </span>
-        </div>
-      </div>
     </div>
   </div>
 </template>
@@ -829,11 +836,27 @@ export default class PipingChat extends Vue {
 
 <!-- Add "scoped" attribute to limit CSS to this component only -->
 <style scoped>
-.me{
-  text-align: right;
-}
 .time{
   font-size: 0.6em;
-  color: #aaa;
+  color: #333;
+}
+
+.talk {
+  width: 70%;
+  font-size: 1.5em;
+  padding: 0.5em;
+  border-radius: 0.5em;
+  margin-bottom: 1em;
+}
+
+.peer {
+  background: #ccc;
+}
+
+.me {
+  background: #4F91FD;
+  /* (from: http://webfeelfree.com/css-align/) */
+  margin-left: auto;
+  color: white;
 }
 </style>
