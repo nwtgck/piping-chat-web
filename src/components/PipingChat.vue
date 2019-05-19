@@ -141,7 +141,7 @@
                 "peer": talk.talkerId !== talkerId,
                 "talk": true
               }'>
-                {{talk.content }}<br>
+                <pre>{{ talk.content }}</pre>
                 <span style="color: #444">
                   <span v-if="talk.talkerId === talkerId">
                     {{ talk.arrived ? "✓" : "" }}
