@@ -76,10 +76,11 @@
                           :rules="[v => !!v || 'Peer\'s public RSA is required']"/>
             </div>
 
-            <v-btn color="success"
+            <v-btn color="primary"
                    v-on:click="connectToPeer()"
-                   v-bind:disabled="!isConnectable"
-                   block>
+                   v-bind:disabled="!isConnectable || isConnecting"
+                   block >
+              <v-icon>fas fa-plug</v-icon>&nbsp;
               Connect
             </v-btn>
           </v-card>
@@ -265,6 +266,7 @@ export default class PipingChat extends Vue {
   }
 
   private isEstablished: boolean = false;
+  private isConnecting: boolean = false;
 
   // Whether connect form is valid or not
   private isConnectable: boolean = false;
@@ -323,7 +325,6 @@ export default class PipingChat extends Vue {
       },
     ];
   }
-
 
   // Public JWK string for encryption
   private publicEncryptJwkString: string = '';
@@ -395,6 +396,7 @@ export default class PipingChat extends Vue {
 
     // Connect to the peer
     this.pipingChatter.connectToPeer();
+    this.isConnecting = true;
   }
 
   private sendTalk(): void {

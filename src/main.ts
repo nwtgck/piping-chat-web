@@ -3,7 +3,7 @@ import 'material-design-icons-iconfont/dist/material-design-icons.css';
 
 // (from: https://e-joint.jp/474/)
 import '@fortawesome/fontawesome';
-// import '@fortawesome/fontawesome-free-solid';
+import '@fortawesome/fontawesome-free-solid';
 // import '@fortawesome/fontawesome-free-regular';
 import '@fortawesome/fontawesome-free-brands';
 
