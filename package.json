@@ -1,6 +1,6 @@
 {
   "name": "piping-chat",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "scripts": {
     "serve": "vue-cli-service serve",
@@ -9,7 +9,6 @@
   },
   "dependencies": {
     "crypto-js": "^3.1.9-1",
-    "fork-me-on-github-vue": "^1.0.7",
     "jsencrypt": "^3.0.0-rc.1",
     "pem-jwk": "^2.0.0",
     "register-service-worker": "^1.6.2",
@@ -28,6 +27,10 @@
   },
   "author": "Ryo Ota <nwtgck@gmail.com> (https://github.com/nwtgck)",
   "devDependencies": {
+    "@fortawesome/fontawesome": "^1.1.8",
+    "@fortawesome/fontawesome-free-brands": "^5.0.13",
+    "@fortawesome/fontawesome-free-regular": "^5.0.13",
+    "@fortawesome/fontawesome-free-solid": "^5.0.13",
     "@types/crypto-js": "^3.1.43",
     "@types/pem-jwk": "^1.5.0",
     "@types/whatwg-fetch": "0.0.33",

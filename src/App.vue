@@ -1,9 +1,12 @@
 <template>
   <v-app id="app">
-    <Ribbon v-bind="ribbonOptions"></Ribbon>
     <h1 style="text-align: center">Piping Chat</h1>
     <p style="text-align: center">
-      🛡 End-to-End Encryption Chat via <a href="https://github.com/nwtgck/piping-server">Piping Server</a>
+      🛡 End-to-End Encryption Chat via <a href="https://github.com/nwtgck/piping-server">Piping Server</a>&nbsp;
+      <br>
+      <a href="https://github.com/nwtgck/piping-chat-web">
+        <v-icon>fab fa-github</v-icon> GitHub
+      </a>
     </p>
     <PipingChat />
   </v-app>
@@ -11,24 +14,15 @@
 
 <script lang="ts">
 import { Component, Vue } from 'vue-property-decorator';
-import ForkeMeOnGithub from 'fork-me-on-github-vue';
 import PipingChat from './components/PipingChat.vue';
 
-Vue.use(ForkeMeOnGithub);
 
 @Component({
   components: {
     PipingChat,
-    ForkeMeOnGithub,
   },
 })
-export default class App extends Vue {
-  public ribbonOptions = {
-    text: 'Open on GitHub',
-    linkUrl: 'https://github.com/nwtgck/piping-chat-web',
-    fixed: true,
-  };
-}
+export default class App extends Vue {}
 </script>
 
 <style>
@@ -39,5 +33,9 @@ export default class App extends Vue {
   /*text-align: center;*/
   color: #2c3e50;
   padding-top: 20px;
+}
+
+a {
+  text-decoration: none;
 }
 </style>
