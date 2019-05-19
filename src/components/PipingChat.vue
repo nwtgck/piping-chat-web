@@ -39,12 +39,14 @@
             </v-btn>
             <!-- Save PEM button -->
             <v-btn color="secondary"
+                   v-bind:disabled="!isSignPemSaveable"
                    v-on:click="savePrivateKey()">
               <v-icon>save</v-icon>
               Save PEMs
             </v-btn>
             <!-- Erase PEM button -->
             <v-btn color="secondary"
+                   v-bind:disabled="!isSignPemErasable"
                    v-on:click="erasePrivateKey()">
               <v-icon>delete</v-icon>
               Erase PEMs
@@ -104,10 +106,10 @@
     </v-layout>
 
     <div style="margin: 1em;">
-      <!-- Talk input -->
-      <v-layout v-if="isEstablished">
+      <v-layout>
         <v-flex offset-md1 md10 offset-lg2 lg8>
-          <v-container fluid>
+          <!-- Talk input -->
+          <v-container fluid v-if="isEstablished">
             <v-layout column>
               <v-flex>
                 <!-- NOTE: hide-details is for deleting bottom space -->
@@ -316,6 +318,25 @@ async function getJwkString(key: CryptoKey): Promise<string> {
   return JSON.stringify(jwk, null, '  ');
 }
 
+/**
+ * Get public PEM from private PEM
+ * @param privatePem
+ */
+function getPublicPemFromPrivate(privatePem: string): string | undefined {
+  if (privatePem === '') {
+    return undefined;
+  } else {
+    try {
+      // Compute public key by the private key
+      const crypt = new jsencrypt.JSEncrypt();
+      crypt.setPrivateKey(privatePem);
+      return crypt.getPublicKey();
+    } catch (err) {
+      return undefined;
+    }
+  }
+}
+
 const StorageKeys = {
   PRIVATE_SIGNATURE_PEM: 'LOCAL_STORAGE_KEY/PRIVATE_SIGNATURE_PEM',
 };
@@ -332,14 +353,11 @@ export default class PipingChat extends Vue {
     if (this.privateSignPem === '') {
       return '';
     } else {
-      try {
-        // Compute public key by the private key
-        const crypt = new jsencrypt.JSEncrypt();
-        crypt.setPrivateKey(this.privateSignPem);
-        return crypt.getPublicKey();
-      } catch (err) {
-        console.error(err);
+      const publicSignPem: string | undefined = getPublicPemFromPrivate(this.privateSignPem);
+      if (publicSignPem === undefined) {
         return 'INVALID PRIVATE KEY';
+      } else {
+        return publicSignPem;
       }
     }
   }
@@ -407,6 +425,14 @@ export default class PipingChat extends Vue {
   // Context to send talks sequentially
   private sendSeqCtx    = new PromiseSequentialContext();
 
+  // Whether sign PEM can be saved
+  private get isSignPemSaveable(): boolean {
+    return getPublicPemFromPrivate(this.privateSignPem) !== undefined;
+  }
+
+  // Whether sign PEM can be erased
+  private isSignPemErasable: boolean = false;
+
 
   // Public JWK string for encryption
   @AsyncComputed()
@@ -441,6 +467,8 @@ export default class PipingChat extends Vue {
     // If private key is found
     if (privatePem !== null) {
       this.privateSignPem = privatePem;
+      // Sign PEM is erasable
+      this.isSignPemErasable = true;
       this.echoSystemTalk('🔑 Your private PEM loaded!');
     }
   }
@@ -808,6 +836,8 @@ export default class PipingChat extends Vue {
     if (this.privateSignPem !== '') {
       // Save private key in local storage
       localStorage.setItem(StorageKeys.PRIVATE_SIGNATURE_PEM, this.privateSignPem);
+      // Sign PEM is erasable
+      this.isSignPemErasable = true;
       this.echoSystemTalk('Your private PEM saved.');
     }
   }
@@ -818,6 +848,8 @@ export default class PipingChat extends Vue {
       this.echoSystemTalk('Private PEM is not saved yet.');
     } else {
       localStorage.removeItem(StorageKeys.PRIVATE_SIGNATURE_PEM);
+      // Sign PEM is not erasable
+      this.isSignPemErasable = false;
       this.echoSystemTalk('Your private PEM erased from local storage.');
     }
   }
