@@ -251,7 +251,7 @@ const StorageKeys = {
 export default class PipingChat extends Vue {
 
   // My public key
-  get publicSignPem(): string {
+  private get publicSignPem(): string {
     if (this.privateSignPem === '') {
       return '';
     } else {
@@ -264,40 +264,40 @@ export default class PipingChat extends Vue {
     }
   }
 
-  public isEstablished: boolean = false;
+  private isEstablished: boolean = false;
 
   // Whether connect form is valid or not
-  public isConnectable: boolean = false;
+  private isConnectable: boolean = false;
 
   // TODO: Hard code
-  public serverUrl: string = 'https://ppng.ml';
-  public peerId: string = '';
+  private serverUrl: string = 'https://ppng.ml';
+  private peerId: string = '';
 
-  public talkerId = getRandomId(3);
-  public talks: Talk[] = [];
+  private talkerId = getRandomId(3);
+  private talks: Talk[] = [];
 
-  public talk: string = '';
+  private talk: string = '';
 
-  public nKeyBits = 4096;
+  private nKeyBits = 4096;
 
-  public pipingChatter?: PipingChatter;
+  private pipingChatter?: PipingChatter;
 
   // Session ID
-  public sessionId: string = '';
+  private sessionId: string = '';
 
   // Whether using signature to verify peer
-  public enableSignature = false;
+  private enableSignature = false;
   // Private PEM only for signature
-  public privateSignPem = '';
+  private privateSignPem = '';
   // Peer's public PEM for signature
-  public peerPublicSignPem = '';
+  private peerPublicSignPem = '';
   // Whether showing private PEM for signature or not
-  public showsPrivateSignPem: boolean = false;
+  private showsPrivateSignPem: boolean = false;
   // Whether showing private JWK for encryption or not
-  public showsPrivateEncryptJwk: boolean = false;
+  private showsPrivateEncryptJwk: boolean = false;
 
   // Algorithm for signature
-  public signAlg = { name: 'RSASSA-PKCS1-v1_5', hash: { name: 'SHA-256' } };
+  private signAlg = { name: 'RSASSA-PKCS1-v1_5', hash: { name: 'SHA-256' } };
 
   // Whether sign PEM can be saved
   private get isSignPemSaveable(): boolean {
@@ -345,7 +345,7 @@ export default class PipingChat extends Vue {
     }
   }
 
-  public connectToPeer(): void {
+  private connectToPeer(): void {
     // Generate chatting system
     this.pipingChatter = new PipingChatter({
       serverUrl: this.serverUrl,
@@ -397,7 +397,7 @@ export default class PipingChat extends Vue {
     this.pipingChatter.connectToPeer();
   }
 
-  public sendTalk(): void {
+  private sendTalk(): void {
     if (this.pipingChatter === undefined) {
       console.error('Unexpected error: piping chatter is not defined');
     } else {
