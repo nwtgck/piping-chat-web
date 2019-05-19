@@ -1,109 +1,128 @@
 <template xmlns:v-slot="http://www.w3.org/1999/XSL/Transform">
   <div>
-    <v-layout>
-      <v-flex xs12 offset-sm2 sm8 offset-md3 md6>
-        <v-card style="padding: 1em;">
-          <v-text-field label="Server URL"
-                        v-model="serverUrl" />
-          <v-text-field label="Your ID"
-                        v-model="talkerId" />
-          <v-text-field label="Peer ID"
-                        v-model="peerId"
-                        placeholder="e.g. bma" />
-          <v-switch label="Public key authentication"
-                    v-model="enableSignature" />
+    <v-form v-model="isConnectable">
+      <v-layout>
+        <v-flex xs12 offset-sm2 sm8 offset-md3 md6>
+          <v-card style="padding: 1em;">
+            <v-text-field label="Server URL"
+                          v-model="serverUrl"
+                          :rules="[v => !!v || 'Server URL is required']"
+                          required />
+            <v-text-field label="Your ID"
+                          v-model="talkerId"
+                          :rules="[v => !!v || 'Your ID is required']"
+                          required />
+            <v-text-field label="Peer ID"
+                          v-model="peerId"
+                          placeholder="e.g. bma"
+                          :rules="[v => !!v || 'Peer ID is required']"
+                          required />
+            <v-switch label="Public key authentication"
+                      v-model="enableSignature" />
 
-          <div v-if="enableSignature">
-            <v-textarea label="Your public RSA PEM"
-                        v-model="publicSignPem"
-                        readonly
-                        outline
-                        prepend-icon="person" />
-            <v-switch label="Show your private PEM"
-                      color="secondary"
-                      v-model="showsPrivateSignPem"/>
-            <v-textarea label="Your private RSA PEM"
-                        v-model="privateSignPem"
-                        v-if="showsPrivateSignPem"
-                        outline
-                        prepend-icon="lock" />
-
-            <v-text-field label="Key bits"
-                          type="number"
-                          v-model="nKeyBits" />
-            <!-- Generate PEM button -->
-            <v-btn color="secondary"
-                   v-on:click="assignPrivatePem()">
-              <v-icon>autorenew</v-icon>
-              Generate PEMs
-            </v-btn>
-            <!-- Save PEM button -->
-            <v-btn color="secondary"
-                   v-bind:disabled="!isSignPemSaveable"
-                   v-on:click="savePrivateKey()">
-              <v-icon>save</v-icon>
-              Save PEMs
-            </v-btn>
-            <!-- Erase PEM button -->
-            <v-btn color="secondary"
-                   v-bind:disabled="!isSignPemErasable"
-                   v-on:click="erasePrivateKey()">
-              <v-icon>delete</v-icon>
-              Erase PEMs
-            </v-btn>
-
-            <v-textarea label="Peer's public RSA PEM"
-                        v-model="peerPublicSignPem"
-                        outline
-                        prepend-icon="person"
-                        style="padding-top: 3em;"/>
-          </div>
-
-          <v-btn color="success"
-                 v-on:click="connectToPeer()"
-                 block>
-            Connect
-          </v-btn>
-        </v-card>
-
-        <v-expansion-panel>
-          <v-expansion-panel-content>
-            <template v-slot:header>
-              <v-icon>person</v-icon>
-              <div>Connection details</div>
-            </template>
-            <v-card style="padding: 1em;">
-              <v-text-field label="Session ID"
-                            v-bind:value="sessionId"
-                            placeholder=" "
-                            readonly />
-              <v-textarea label="Your public JWK for encryption"
-                          v-model="publicEncryptJwkString"
+            <div v-if="enableSignature">
+              <v-alert :value="true"
+                       type="info"
+                       outline
+                       style="margin-bottom: 1em;"
+              >
+                NOTE: You can modify your public PEM by <b>private one</b>.
+              </v-alert>
+              <v-textarea label="Your public RSA PEM"
+                          v-model="publicSignPem"
+                          :rules="publicPrivateSignPemRules"
                           readonly
-                          prepend-icon="public"
-                          outline />
-              <v-switch label="Show private JWK for encryption"
+                          outline
+                          prepend-icon="person" />
+              <v-switch label="Show/Edit your private PEM"
                         color="secondary"
-                        v-model="showsPrivateEncryptJwk"/>
-              <v-textarea label="Your private JWK for encryption"
-                          v-model="privateEncryptJwkString"
-                          v-if="showsPrivateEncryptJwk"
-                          readonly
-                          prepend-icon="vpn_key"
-                          outline />
+                        v-model="showsPrivateSignPem" />
+              <v-textarea label="Your private RSA PEM"
+                          v-model="privateSignPem"
+                          :rules="publicPrivateSignPemRules"
+                          v-if="showsPrivateSignPem"
+                          outline
+                          prepend-icon="lock" />
 
-              <h4></h4>
-              <v-textarea label="Peer's public JWK for encryption"
-                          v-model="peerPublicEncryptJwkString"
-                          readonly
-                          prepend-icon="public"
-                          placeholder=" "
-                          outline />
-            </v-card>
-          </v-expansion-panel-content>
-        </v-expansion-panel>
-      </v-flex>
-    </v-layout>
+              <v-text-field label="Key bits"
+                            type="number"
+                            v-model="nKeyBits" />
+              <!-- Generate PEM button -->
+              <v-btn color="secondary"
+                     v-on:click="assignPrivatePem()">
+                <v-icon>autorenew</v-icon>
+                Generate PEMs
+              </v-btn>
+              <!-- Save PEM button -->
+              <v-btn color="secondary"
+                     v-bind:disabled="!isSignPemSaveable"
+                     v-on:click="savePrivateKey()">
+                <v-icon>save</v-icon>
+                Save PEMs
+              </v-btn>
+              <!-- Erase PEM button -->
+              <v-btn color="secondary"
+                     v-bind:disabled="!isSignPemErasable"
+                     v-on:click="erasePrivateKey()">
+                <v-icon>delete</v-icon>
+                Erase PEMs
+              </v-btn>
+
+              <v-textarea label="Peer's public RSA PEM"
+                          v-model="peerPublicSignPem"
+                          outline
+                          prepend-icon="person"
+                          style="padding-top: 3em;"
+                          :rules="[v => !!v || 'Peer\'s public RSA is required']"/>
+            </div>
+
+            <v-btn color="success"
+                   v-on:click="connectToPeer()"
+                   v-bind:disabled="!isConnectable"
+                   block>
+              Connect
+            </v-btn>
+          </v-card>
+
+          <v-expansion-panel>
+            <v-expansion-panel-content>
+              <template v-slot:header>
+                <v-icon>person</v-icon>
+                <div>Connection details</div>
+              </template>
+              <v-card style="padding: 1em;">
+                <v-text-field label="Session ID"
+                              v-bind:value="sessionId"
+                              placeholder=" "
+                              readonly />
+                <v-textarea label="Your public JWK for encryption"
+                            v-model="publicEncryptJwkString"
+                            readonly
+                            prepend-icon="public"
+                            outline />
+                <v-switch label="Show private JWK for encryption"
+                          color="secondary"
+                          v-model="showsPrivateEncryptJwk"/>
+                <v-textarea label="Your private JWK for encryption"
+                            v-model="privateEncryptJwkString"
+                            v-if="showsPrivateEncryptJwk"
+                            readonly
+                            prepend-icon="vpn_key"
+                            outline />
+
+                <h4></h4>
+                <v-textarea label="Peer's public JWK for encryption"
+                            v-model="peerPublicEncryptJwkString"
+                            readonly
+                            prepend-icon="public"
+                            placeholder=" "
+                            outline />
+              </v-card>
+            </v-expansion-panel-content>
+          </v-expansion-panel>
+        </v-flex>
+      </v-layout>
+    </v-form>
 
     <div style="margin: 1em;">
       <v-layout>
@@ -169,7 +188,7 @@
 
 <script lang="ts">
 /* tslint:disable:no-console */
-import {Component, Vue} from 'vue-property-decorator';
+import {Component, Vue, Watch} from 'vue-property-decorator';
 import TimeAgo from 'vue2-timeago';
 import * as jsencrypt from 'jsencrypt';
 import * as cryptojs from 'crypto-js';
@@ -365,6 +384,10 @@ export default class PipingChat extends Vue {
   get isEstablished(): boolean {
     return this.hasPublicKeySent && this.hasPeerPublicKeyReceived && (!this.enableSignature || this.peerVerified);
   }
+
+  // Whether connect form is valid or not
+  public isConnectable: boolean = false;
+
   // TODO: Hard code
   public serverUrl: string = 'https://ppng.ml';
   public peerId: string = '';
@@ -432,6 +455,23 @@ export default class PipingChat extends Vue {
 
   // Whether sign PEM can be erased
   private isSignPemErasable: boolean = false;
+
+  // NOTE: Should use getter if you use it as property, this.enableSignature is always false
+  private get publicPrivateSignPemRules(): ReadonlyArray<(v: string) => string | true> {
+    return [
+      (v) => {
+        if (this.enableSignature) {
+          if (getPublicPemFromPrivate(this.privateSignPem) === undefined) {
+            return 'Your private RSA PEM is not valid';
+          } else {
+            return true;
+          }
+        } else {
+          return true;
+        }
+      },
+    ];
+  }
 
 
   // Public JWK string for encryption
