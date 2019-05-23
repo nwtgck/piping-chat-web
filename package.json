@@ -1,6 +1,6 @@
 {
   "name": "piping-chat",
-  "version": "0.5.0",
+  "version": "0.5.1-SNAPSHOT",
   "private": true,
   "scripts": {
     "serve": "vue-cli-service serve",
