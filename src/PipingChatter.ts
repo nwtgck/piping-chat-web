@@ -5,6 +5,7 @@ import {nul, bool, num, str, literal, opt, arr, tuple, obj, union, TsType, valid
 import {PromiseSequentialContext} from '@/promise-sequential-context';
 import * as utils from '@/utils';
 import {UserTalk, Talk} from '@/Talk';
+import {jwkThumbprintByEncoding} from 'jwk-thumbprint';
 
 const rsaOtherPrimesInfoFormat = obj({
   d: opt(str),
@@ -68,14 +69,6 @@ function getPath(toId: string, fromId: string): string {
   return cryptojs.SHA256(`${toId}-to-${fromId}`).toString();
 }
 
-// (NOTE: The reason not to use JSON.stringify() is that I'm not sure the order of items is always same.)
-// TODO: Remove it and Use JWK thumbprint instead
-function getPoorJwkFingerprint(jwk: JsonWebKey): string {
-  // JSON string sorted by keys
-  // (from: https://stackoverflow.com/a/16168003/2885946)
-  return JSON.stringify(jwk, Object.keys(jwk));
-}
-
 // Generate session ID
 async function generateSessionId(sessionIdPublicJwk: JsonWebKey, sessionIdPrivateKey: CryptoKey): Promise<string> {
   // Convert JWK To CryptoKey
@@ -95,13 +88,13 @@ async function generateSessionId(sessionIdPublicJwk: JsonWebKey, sessionIdPrivat
     ['encrypt', 'decrypt'],
   );
   // Convert the secret key to JWK
-  const sessionIdJwk: JsonWebKey = await window.crypto.subtle.exportKey(
+  // NOTE: 'kty' should be 'oct'  logically
+  const sessionIdJwk: JsonWebKey & {kty: 'oct'} = await window.crypto.subtle.exportKey(
     'jwk',
     sessionIdKey,
-  );
-  const sessionIdPoorFingerprint = getPoorJwkFingerprint(sessionIdJwk);
-  // Return session ID
-  return cryptojs.SHA256(sessionIdPoorFingerprint).toString();
+  ) as (JsonWebKey & {kty: 'oct'});
+  // Get JWK thumbprint by hex
+  return jwkThumbprintByEncoding(sessionIdJwk, 'SHA-256', 'hex');
 }
 
 
