@@ -36,7 +36,7 @@
     "@types/pem-jwk": "^1.5.0",
     "@types/whatwg-fetch": "0.0.33",
     "@vue/cli-plugin-babel": "^3.7.0",
-    "@vue/cli-plugin-pwa": "^3.7.0",
+    "@vue/cli-plugin-pwa": "^3.8.0",
     "@vue/cli-plugin-typescript": "^3.8.1",
     "@vue/cli-service": "^3.8.0",
     "material-design-icons-iconfont": "^5.0.1",
