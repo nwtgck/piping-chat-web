@@ -17,7 +17,7 @@
     "vue": "^2.6.6",
     "vue-async-computed": "^3.7.0",
     "vue-class-component": "^7.1.0",
-    "vue-property-decorator": "^8.1.1",
+    "vue-property-decorator": "^8.2.1",
     "vue2-timeago": "^1.2.2",
     "vuetify": "^1.5.14",
     "whatwg-fetch": "^3.0.0"
