@@ -1,12 +1,13 @@
 # piping-chat
-[![Netlify Status](https://api.netlify.com/api/v1/badges/907dbaac-d0c3-44dd-8578-e4ca6bfba2b9/deploy-status)](https://app.netlify.com/sites/piping-chat/deploys)
+[![Netlify Status](https://api.netlify.com/api/v1/badges/907dbaac-d0c3-44dd-8578-e4ca6bfba2b9/deploy-status)](https://app.netlify.com/sites/piping-chat/deploys)  
+ <a href="https://piping-chat.netlify.com"><img src="https://user-images.githubusercontent.com/9122190/28998409-c5bf7362-7a00-11e7-9b63-db56694522e7.png" alt="Launch now as Web App" height="48"></a>
 
 End-to-End Encryption Chat via [Piping Server](https://github.com/nwtgck/piping-server)
 
 ![Piping Chat 0.4.1 without public key authentication](doc_assets/piping-chat-0.4.1-without-auth.gif)
 
 ## Application
-Piping Chat: <https://piping-chat.netlify.com/>
+Piping Chat: <https://piping-chat.netlify.com>
 
 ## Purpose & Features
 The main purpose of Piping Chat allows users chat safely via Piping Server. It has the following features for the purpose.
