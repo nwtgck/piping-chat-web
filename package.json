@@ -1,6 +1,6 @@
 {
   "name": "piping-chat",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "private": true,
   "scripts": {
     "serve": "vue-cli-service serve",
@@ -17,7 +17,7 @@
     "vue": "^2.6.6",
     "vue-async-computed": "^3.7.0",
     "vue-class-component": "^7.1.0",
-    "vue-property-decorator": "^8.2.1",
+    "vue-property-decorator": "^8.2.2",
     "vue2-timeago": "^1.2.2",
     "vuetify": "^1.5.16",
     "whatwg-fetch": "^3.0.0"
@@ -35,12 +35,12 @@
     "@types/crypto-js": "^3.1.43",
     "@types/pem-jwk": "^1.5.0",
     "@types/whatwg-fetch": "0.0.33",
-    "@vue/cli-plugin-babel": "^3.9.2",
-    "@vue/cli-plugin-pwa": "^3.9.0",
-    "@vue/cli-plugin-typescript": "^3.9.0",
-    "@vue/cli-service": "^3.9.2",
+    "@vue/cli-plugin-babel": "^3.11.0",
+    "@vue/cli-plugin-pwa": "^3.11.0",
+    "@vue/cli-plugin-typescript": "^3.11.0",
+    "@vue/cli-service": "^3.11.0",
     "material-design-icons-iconfont": "^5.0.1",
     "typescript": "^3.5.3",
-    "vue-template-compiler": "^2.5.21"
+    "vue-template-compiler": "^2.6.10"
   }
 }
