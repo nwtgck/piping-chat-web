@@ -40,7 +40,7 @@
     "@vue/cli-plugin-typescript": "^3.11.0",
     "@vue/cli-service": "^3.11.0",
     "material-design-icons-iconfont": "^5.0.1",
-    "typescript": "^3.5.3",
+    "typescript": "^3.6.2",
     "vue-template-compiler": "^2.6.10"
   }
 }
