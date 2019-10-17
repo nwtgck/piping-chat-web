@@ -35,7 +35,7 @@
     "@types/crypto-js": "^3.1.43",
     "@types/pem-jwk": "^1.5.0",
     "@types/whatwg-fetch": "0.0.33",
-    "@vue/cli-plugin-babel": "^3.11.0",
+    "@vue/cli-plugin-babel": "^4.0.3",
     "@vue/cli-plugin-pwa": "^3.11.0",
     "@vue/cli-plugin-typescript": "^3.11.0",
     "@vue/cli-service": "^3.11.0",
