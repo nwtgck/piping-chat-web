@@ -20,7 +20,7 @@
     "vue-async-computed": "^3.7.0",
     "vue-class-component": "^7.1.0",
     "vue-property-decorator": "^8.2.2",
-    "vue2-timeago": "^1.2.2",
+    "vue2-timeago": "^1.2.3",
     "vuetify": "^1.5.16",
     "whatwg-fetch": "^3.0.0"
   },
