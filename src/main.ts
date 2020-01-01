@@ -10,13 +10,11 @@ import '@fortawesome/fontawesome-free-brands';
 import Vue from 'vue';
 import App from './App.vue';
 import './registerServiceWorker';
-import AsyncComputed from 'vue-async-computed';
 import Vuetify from 'vuetify';
 import 'vuetify/dist/vuetify.min.css';
 
 Vue.config.productionTip = false;
 
-Vue.use(AsyncComputed);
 Vue.use(Vuetify);
 
 new Vue({
