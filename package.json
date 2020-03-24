@@ -20,7 +20,7 @@
     "vue-class-component": "^7.2.2",
     "vue-property-decorator": "^8.4.0",
     "vue2-timeago": "^1.2.6",
-    "vuetify": "^1.5.16",
+    "vuetify": "^2.2.19",
     "whatwg-fetch": "^3.0.0"
   },
   "devDependencies": {
