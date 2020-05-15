@@ -28,7 +28,7 @@
     "@fortawesome/fontawesome-free-brands": "^5.0.13",
     "@fortawesome/fontawesome-free-regular": "^5.0.13",
     "@fortawesome/fontawesome-free-solid": "^5.0.13",
-    "@types/crypto-js": "^3.1.43",
+    "@types/crypto-js": "^3.1.46",
     "@types/pem-jwk": "^1.5.0",
     "@types/whatwg-fetch": "0.0.33",
     "@vue/cli-plugin-babel": "^4.1.2",
