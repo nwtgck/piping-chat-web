@@ -21,7 +21,7 @@
     "vue-property-decorator": "^8.4.0",
     "vue2-timeago": "^1.2.6",
     "vuetify": "^1.5.16",
-    "whatwg-fetch": "^3.0.0"
+    "whatwg-fetch": "^3.3.1"
   },
   "devDependencies": {
     "@fortawesome/fontawesome": "^1.1.8",
