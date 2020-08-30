@@ -35,7 +35,7 @@
     "@vue/cli-plugin-pwa": "^4.1.2",
     "@vue/cli-plugin-typescript": "^4.1.2",
     "@vue/cli-service": "^4.1.2",
-    "material-design-icons-iconfont": "^5.0.1",
+    "material-design-icons-iconfont": "^6.0.1",
     "typescript": "^3.7.5",
     "vue-template-compiler": "^2.6.11"
   },
