@@ -272,7 +272,7 @@ export default class PipingChat extends Vue {
   private isConnectable: boolean = false;
 
   // TODO: Hard code
-  private serverUrl: string = 'https://ppng.ml';
+  private serverUrl: string = 'https://ppng.io';
   private peerId: string = '';
 
   private talkerId = getRandomId(3);
