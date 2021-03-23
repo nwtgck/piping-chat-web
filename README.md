@@ -1,4 +1,4 @@
-# piping-chat
+# piping-chat!
 [![Netlify Status](https://api.netlify.com/api/v1/badges/907dbaac-d0c3-44dd-8578-e4ca6bfba2b9/deploy-status)](https://app.netlify.com/sites/piping-chat/deploys)  
  <a href="https://piping-chat.netlify.com"><img src="https://user-images.githubusercontent.com/9122190/28998409-c5bf7362-7a00-11e7-9b63-db56694522e7.png" alt="Launch now as Web App" height="48"></a>
 
